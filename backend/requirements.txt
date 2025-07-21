@@ -1,0 +1,9 @@
+fastapi==0.116.1
+uvicorn[standard]~=0.28
+sqlalchemy~=2.0.41
+asyncpg
+aiohttp
+pydantic
+gspread==6.*        # optional Google Sheets
+google-auth
+python-multipart
