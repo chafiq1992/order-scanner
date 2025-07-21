@@ -8,7 +8,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "html5-qrcode": "^2.4.10",
+    "html5-qrcode": "2.3.8",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
