@@ -14,7 +14,7 @@ export default function Scanner({ onSummary }) {
         headers: {"Content-Type":"application/json"},
         body: JSON.stringify({ barcode })
       }).then(r=>r.json());
-      setResult(\`\${statusIcon(r.result)} \${r.result}\`);
+      setResult(\`${statusIcon(r.result)} ${r.result}\`);
       setClassName(resultClass(r.result));
       updateSummary();
     } catch (e) {
