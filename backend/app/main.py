@@ -1,11 +1,17 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles        # ← NEW
 from .schemas import ScanIn, ScanOut
 from . import shopify, database, models, sheets
 from sqlalchemy import select
-import re, asyncio
+import re, asyncio, os
 from datetime import datetime
 
-app = FastAPI(title="Order-Scanner API")
+app = FastAPI(title="Order‑Scanner API")
+
+# ---------- NEW: serve React bundle ----------
+static_path = os.getenv("STATIC_FILES_PATH", "static")   # set in Dockerfile
+app.mount("/", StaticFiles(directory=static_path, html=True), name="static")
+# ------------------------------------------------
 
 @app.on_event("startup")
 async def _init():
@@ -35,24 +41,34 @@ async def scan(data: ScanIn):
 
     order = await shopify.find_order(order_name)
 
-    if order["fulfillment"].lower()=="unfulfilled" and not order["tags"]:
-        return ScanOut(result="❌ Unfulfilled order with no tag — not added",
-                       order=order_name, tag="", ts=datetime.utcnow())
+    if order["fulfillment"].lower() == "unfulfilled" and not order["tags"]:
+        return ScanOut(
+            result="❌ Unfulfilled order with no tag — not added",
+            order=order_name,
+            tag="",
+            ts=datetime.utcnow()
+        )
 
     scan = models.Scan(
-        order_name  = order_name,
-        tags        = order.get("tags",""),
-        fulfillment = order["fulfillment"],
-        status      = order["status"],
-        store       = order["store"],
-        result      = order["result"],
+        order_name=order_name,
+        tags=order.get("tags", ""),
+        fulfillment=order["fulfillment"],
+        status=order["status"],
+        store=order["store"],
+        result=order["result"],
     )
     async with database.AsyncSessionLocal() as db:
         db.add(scan)
         await db.commit()
+
     await sheets.append_row([
-        scan.ts.isoformat(" ", "seconds"), order_name, scan.tags,
-        scan.fulfillment, scan.status, scan.store, scan.result
+        scan.ts.isoformat(" ", "seconds"),
+        order_name,
+        scan.tags,
+        scan.fulfillment,
+        scan.status,
+        scan.store,
+        scan.result
     ])
     return ScanOut(result=scan.result, order=order_name, tag=scan.tags, ts=scan.ts)
 
@@ -64,8 +80,10 @@ async def tag_summary():
         for (t,) in q:
             low = (t or "").lower()
             for k in counts:
-                if k in low: counts[k] += 1
+                if k in low:
+                    counts[k] += 1
     return counts
 
 @app.get("/health")
-def health(): return {"ok": True}
+def health():
+    return {"ok": True}
