@@ -9,7 +9,7 @@ export default function Scanner({ onSummary }) {
   async function process(barcode) {
     setResult("⏳ Processing…");
     try {
-      const r = await fetch(\`\${import.meta.env.VITE_API_BASE_URL}/scan\`, {
+      const r = await fetch(`${import.meta.env.VITE_API_BASE_URL}/scan`, {
         method: "POST",
         headers: {"Content-Type":"application/json"},
         body: JSON.stringify({ barcode })
