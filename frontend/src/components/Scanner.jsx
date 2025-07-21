@@ -11,10 +11,11 @@ export default function Scanner({ onSummary }) {
     try {
       const r = await fetch(`${import.meta.env.VITE_API_BASE_URL}/scan`, {
         method: "POST",
-        headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({ barcode })
-      }).then(r=>r.json());
-      setResult(\`${statusIcon(r.result)} ${r.result}\`);
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ barcode }),
+      }).then((res) => res.json());
+
+      setResult(`${statusIcon(r.result)} ${r.result}`);
       setClassName(resultClass(r.result));
       updateSummary();
     } catch (e) {
@@ -25,29 +26,56 @@ export default function Scanner({ onSummary }) {
 
   function start() {
     const reader = new Html5Qrcode(readerRef.current.id);
-    reader.start({ facingMode:"environment" }, { fps:10, qrbox:250 }, code =>{
-        reader.stop(); process(code);
-      });
+    reader.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: 250 },
+      (code) => {
+        reader.stop();
+        process(code);
+      }
+    );
   }
 
-  async function updateSummary(){
-    const s = await fetch(\`\${import.meta.env.VITE_API_BASE_URL}/tag-summary\`).then(r=>r.json());
+  async function updateSummary() {
+    const s = await fetch(
+      `${import.meta.env.VITE_API_BASE_URL}/tag-summary`
+    ).then((res) => res.json());
     onSummary(s);
   }
 
-  useEffect(()=>{updateSummary();},[]);
+  useEffect(() => {
+    updateSummary();
+  }, []);
 
   return (
     <>
-      <div id="reader" ref={readerRef} className="w-72 rounded-lg shadow-lg"></div>
-      <button onClick={start}
-              className="mt-4 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg">
+      <div
+        id="reader"
+        ref={readerRef}
+        className="w-72 rounded-lg shadow-lg"
+      ></div>
+      <button
+        onClick={start}
+        className="mt-4 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg"
+      >
         📷 Start Scan
       </button>
-      <p className={\`mt-4 text-xl font-semibold px-4 py-2 rounded-xl \${className}\`}>{result}</p>
+      <p
+        className={`mt-4 text-xl font-semibold px-4 py-2 rounded-xl ${className}`}
+      >
+        {result}
+      </p>
     </>
   );
 }
 
-function statusIcon(r){ return r.includes("✅")?"✅":r.includes("⚠️")?"⚠️":"❌"; }
-function resultClass(r){ return r.includes("✅")?"bg-green-100":r.includes("⚠️")?"bg-yellow-100":"bg-red-100"; }
+function statusIcon(r) {
+  return r.includes("✅") ? "✅" : r.includes("⚠️") ? "⚠️" : "❌";
+}
+function resultClass(r) {
+  return r.includes("✅")
+    ? "bg-green-100"
+    : r.includes("⚠️")
+    ? "bg-yellow-100"
+    : "bg-red-100";
+}
