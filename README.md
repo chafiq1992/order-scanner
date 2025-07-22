@@ -6,7 +6,7 @@ See the docs in the main ChatGPT answer for environment variables and deployment
 
 ## Running the Tests
 
-Install backend dependencies and execute `pytest` from the repository root:
+Install backend dependencies (including the test requirements) and execute `pytest` from the repository root:
 
 ```bash
 pip install -r backend/requirements.txt
