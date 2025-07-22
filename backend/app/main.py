@@ -79,9 +79,9 @@ async def tag_summary():
                     counts[k] += 1
     return counts
 
-static_path = os.getenv("STATIC_FILES_PATH", "static")
-app.mount("/", StaticFiles(directory=static_path, html=True), name="static")
-
 @app.get("/health")
 def health():
     return {"ok": True}
+
+static_path = os.getenv("STATIC_FILES_PATH", "static")
+app.mount("/", StaticFiles(directory=static_path, html=True), name="static")
