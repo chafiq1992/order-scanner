@@ -4,14 +4,18 @@ from .schemas import ScanIn, ScanOut
 from . import shopify, database, models, sheets
 from sqlalchemy import select
 import re, asyncio, os
+from contextlib import asynccontextmanager
 from datetime import datetime
 
-app = FastAPI(title="Order‑Scanner API")
 
-@app.on_event("startup")
-async def _init():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     async with database.engine.begin() as conn:
         await conn.run_sync(models.Base.metadata.create_all)
+    yield
+
+
+app = FastAPI(title="Order‑Scanner API", lifespan=lifespan)
 
 _barcode_re = re.compile(r"\d+")
 
