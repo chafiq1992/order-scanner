@@ -8,11 +8,6 @@ from datetime import datetime
 
 app = FastAPI(title="Order‑Scanner API")
 
-# ---------- NEW: serve React bundle ----------
-static_path = os.getenv("STATIC_FILES_PATH", "static")   # set in Dockerfile
-app.mount("/", StaticFiles(directory=static_path, html=True), name="static")
-# ------------------------------------------------
-
 @app.on_event("startup")
 async def _init():
     async with database.engine.begin() as conn:
@@ -83,6 +78,9 @@ async def tag_summary():
                 if k in low:
                     counts[k] += 1
     return counts
+
+static_path = os.getenv("STATIC_FILES_PATH", "static")
+app.mount("/", StaticFiles(directory=static_path, html=True), name="static")
 
 @app.get("/health")
 def health():
