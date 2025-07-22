@@ -7,3 +7,6 @@ pydantic
 gspread==6.*        # optional Google Sheets
 google-auth
 python-multipart
+httpx
+aiosqlite
+pytest
