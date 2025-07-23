@@ -40,7 +40,11 @@ def _stores_from_individual_vars() -> List[Dict[str, str]]:
     return stores
 
 def _stores() -> List[Dict[str, str]]:
-    """Return a list[dict] describing every Shopify store to query."""
+    """Return a list[dict] describing every Shopify store to query.
+
+    When no credentials are provided the function returns an empty list so that
+    the rest of the application can operate without the Shopify integration.
+    """
     json_blob = os.getenv("SHOPIFY_STORES_JSON")
     if json_blob:
         try:
@@ -48,14 +52,8 @@ def _stores() -> List[Dict[str, str]]:
         except json.JSONDecodeError as e:
             raise RuntimeError("SHOPIFY_STORES_JSON is not valid JSON") from e
 
-    # fall back to individual env‑vars
-    stores = _stores_from_individual_vars()
-    if not stores:
-        raise RuntimeError(
-            "No Shopify credentials found. "
-            "Set SHOPIFY_STORES_JSON or *_API_KEY / *_PASSWORD / *_DOMAIN env‑vars."
-        )
-    return stores
+    # fall back to individual env-vars
+    return _stores_from_individual_vars()
 
 # ---------------- low‑level helpers -----------
 def _auth_hdr(api_key: str, password: str) -> Dict[str, str]:
@@ -81,7 +79,13 @@ async def find_order(order_name: str) -> Dict[str, str]:
     """
     now = dt.datetime.utcnow()
     cutoff = now - dt.timedelta(days=CONFIG["ORDER_CUTOFF_DAYS"])
-    best: Dict[str, str] = {"result": "❌ Not Found"}
+    best: Dict[str, str] = {
+        "tags": "",
+        "fulfillment": "unfulfilled",
+        "status": "open",
+        "store": "",
+        "result": "❌ Not Found",
+    }
 
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(15)) as session:
         for store in _stores():
