@@ -25,6 +25,22 @@ GCP_SA_B64=eyJ0eXAiOiJKV1QiLCJhbGciOiJ...
 SHOPIFY_STORES_JSON=[{"name":"main","api_key":"abc","password":"secret","domain":"example.myshopify.com"}]
 ```
 
+## Building the Frontend
+
+The web UI lives in the `frontend` directory and is built with Vite.  Install
+its dependencies and run the build script:
+
+```bash
+cd frontend
+npm ci
+npm run build
+```
+
+This produces a `dist/` folder that can be served by the API container.  When
+developing locally with `npm run dev` make sure the `VITE_API_BASE_URL`
+environment variable points at your API instance so the app can reach the
+backend.
+
 ## Running the Tests
 
 Install backend dependencies (including the test requirements) and execute `pytest` from the repository root:
