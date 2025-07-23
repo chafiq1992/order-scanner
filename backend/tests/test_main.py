@@ -1,16 +1,18 @@
 import asyncio
+from pathlib import Path
+import os
+import sys
+
 import pytest
 from fastapi.testclient import TestClient
-from pathlib import Path
-import sys
-import os
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 os.environ.setdefault("STATIC_FILES_PATH", "static")
 Path("static").mkdir(exist_ok=True)
-from backend.app.main import app, _clean
-from backend.app import database, models
+
+from backend.app.main import app, _clean  # noqa: E402
+from backend.app import database, models  # noqa: E402
 
 
 @pytest.fixture()
@@ -68,14 +70,17 @@ def seed_scan():
 
     return asyncio.run(_seed())
 
+
 def test_health_endpoint(client):
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json() == {"ok": True}
 
+
 def test_clean_valid():
     assert _clean("00123") == "#123"
     assert _clean("abc123def") == "#123"
+
 
 def test_clean_invalid():
     with pytest.raises(ValueError):
@@ -111,4 +116,3 @@ def test_scan_invalid_barcode(client):
     resp = client.post("/scan", json={"barcode": "abc"})
     assert resp.status_code == 400
     assert resp.json()["detail"] == "❌ Invalid barcode"
-

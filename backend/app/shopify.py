@@ -1,5 +1,12 @@
-import aiohttp, base64, json, asyncio, os, re, datetime as dt
-from typing import Dict, Any, List
+import aiohttp
+import asyncio
+import base64
+import json
+import os
+import re
+from datetime import datetime as dt
+from typing import Any, Dict, List
+
 
 # ---------------- configuration ----------------
 CONFIG = {
@@ -11,6 +18,7 @@ CONFIG = {
 
 # ---------------- env‑var helpers --------------
 _key_re = re.compile(r"^(.*)_API_KEY$")
+
 
 def _stores_from_individual_vars() -> List[Dict[str, str]]:
     """Build store list from *_API_KEY / *_PASSWORD / *_DOMAIN env‑vars."""
@@ -39,6 +47,7 @@ def _stores_from_individual_vars() -> List[Dict[str, str]]:
         )
     return stores
 
+
 def _stores() -> List[Dict[str, str]]:
     """Return a list[dict] describing every Shopify store to query.
 
@@ -55,22 +64,34 @@ def _stores() -> List[Dict[str, str]]:
     # fall back to individual env-vars
     return _stores_from_individual_vars()
 
+
 # ---------------- low‑level helpers -----------
+
+
 def _auth_hdr(api_key: str, password: str) -> Dict[str, str]:
     cred = f"{api_key}:{password}".encode()
-    return {"Authorization": "Basic " + base64.b64encode(cred).decode()}
+    token = base64.b64encode(cred).decode()
+    return {"Authorization": "Basic " + token}
+
 
 async def _fetch_order(
     session: aiohttp.ClientSession, store: Dict[str, str], name: str
 ) -> Dict[str, Any] | None:
-    url = f"https://{store['domain']}/admin/api/2023-07/orders.json?name={name}"
-    async with session.get(url, headers=_auth_hdr(store["api_key"], store["password"])) as r:
+    url = (
+        f"https://{store['domain']}/admin/api/2023-07/orders.json?name={name}"
+    )
+    async with session.get(
+        url,
+        headers=_auth_hdr(store["api_key"], store["password"]),
+    ) as r:
         if r.status != 200:
             raise RuntimeError(f"{store['name']} responded {r.status}")
         data = await r.json()
-        return data.get("orders", [None])[0]
+    return data.get("orders", [None])[0]
 
 # ---------------- public API ------------------
+
+
 async def find_order(order_name: str) -> Dict[str, str]:
     """
     Look up `order_name` (e.g. "#123456") across all configured stores.
@@ -87,7 +108,9 @@ async def find_order(order_name: str) -> Dict[str, str]:
         "result": "❌ Not Found",
     }
 
-    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(15)) as session:
+    async with aiohttp.ClientSession(
+        timeout=aiohttp.ClientTimeout(15)
+    ) as session:
         for store in _stores():
             for attempt in range(1, CONFIG["RETRY_ATTEMPTS"] + 1):
                 try:
@@ -101,15 +124,21 @@ async def find_order(order_name: str) -> Dict[str, str]:
                         break  # too old
                     best = {
                         "tags": order.get("tags", ""),
-                        "fulfillment": order.get("fulfillment_status", "unfulfilled"),
-                        "status": "closed" if order.get("cancelled_at") else "open",
+                        "fulfillment": order.get(
+                            "fulfillment_status",
+                            "unfulfilled",
+                        ),
+                        "status": (
+                            "closed" if order.get("cancelled_at") else "open"
+                        ),
                         "store": store["name"],
                         "result": (
                             "⚠️ Cancelled"
                             if order.get("cancelled_at")
                             else (
                                 "❌ Unfulfilled"
-                                if order.get("fulfillment_status") != "fulfilled"
+                                if order.get("fulfillment_status")
+                                != "fulfilled"
                                 else "✅ OK"
                             )
                         ),
@@ -118,7 +147,9 @@ async def find_order(order_name: str) -> Dict[str, str]:
                 except Exception as e:
                     # only raise on the final attempt
                     if attempt == CONFIG["RETRY_ATTEMPTS"]:
-                        raise RuntimeError(f"{store['name']} lookup failed: {e}") from e
+                        raise RuntimeError(
+                            f"{store['name']} lookup failed: {e}"
+                        ) from e
                     await asyncio.sleep(CONFIG["RETRY_DELAY"] * attempt)
 
     return best
