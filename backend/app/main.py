@@ -24,7 +24,8 @@ _barcode_re = re.compile(r"\d+")
 def _clean(barcode: str) -> str:
     digits = _barcode_re.findall(barcode)
     digits = "".join(digits).lstrip("0")
-    if not digits or len(digits) > 6:
+    max_digits = shopify.CONFIG.get("MAX_DIGITS", 6)
+    if not digits or len(digits) > max_digits:
         raise ValueError("Invalid barcode")
     return "#" + digits
 
