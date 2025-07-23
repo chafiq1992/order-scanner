@@ -3,7 +3,9 @@ from datetime import datetime
 
 
 class ScanIn(BaseModel):
-    barcode: str = Field(..., example="#123456")
+    barcode: str = Field(
+        ..., json_schema_extra={"example": "#123456"}
+    )
 
 
 class ScanOut(BaseModel):
