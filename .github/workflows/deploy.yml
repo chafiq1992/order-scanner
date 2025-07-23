@@ -18,7 +18,8 @@ jobs:
     - uses: google-github-actions/setup-gcloud@v2
     - name: Build & push
       run: |
-        gcloud builds submit --tag gcr.io/$PROJECT_ID/order-scanner .
+        gcloud builds submit --tag gcr.io/$PROJECT_ID/order-scanner \
+          --file backend/Dockerfile backend
     - name: Deploy
       run: |
         gcloud run deploy order-scanner                   --image gcr.io/$PROJECT_ID/order-scanner                   --region ${{ secrets.GCP_REGION }}                   --platform managed                   --allow-unauthenticated                   --set-env-vars DATABASE_URL=$DATABASE_URL,SHOPIFY_STORES_JSON=$SHOPIFY_STORES_JSON
