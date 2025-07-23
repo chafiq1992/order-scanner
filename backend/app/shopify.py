@@ -4,7 +4,7 @@ import base64
 import json
 import os
 import re
-from datetime import datetime as dt
+import datetime as dt
 from typing import Any, Dict, List
 
 
@@ -98,7 +98,7 @@ async def find_order(order_name: str) -> Dict[str, str]:
 
     Returns the first recent match (newest order within ORDER_CUTOFF_DAYS).
     """
-    now = dt.datetime.utcnow()
+    now = dt.datetime.now(dt.timezone.utc)
     cutoff = now - dt.timedelta(days=CONFIG["ORDER_CUTOFF_DAYS"])
     best: Dict[str, str] = {
         "tags": "",
