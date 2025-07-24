@@ -2,6 +2,7 @@ import asyncio
 import datetime
 import sys
 from pathlib import Path
+import os
 
 import pytest
 
@@ -28,4 +29,15 @@ def test_find_order_returns_dict(monkeypatch):
     result = asyncio.run(shopify.find_order("#123"))
     assert result["result"] == "✅ OK"
     assert result["store"] == "test"
+
+
+def test_normalize_domain_env(monkeypatch):
+    env = {
+        "FOO_API_KEY": "x",
+        "FOO_PASSWORD": "y",
+        "FOO_DOMAIN": "https://example.myshopify.com/",
+    }
+    monkeypatch.setattr(os, "environ", env, raising=False)
+    stores = shopify._stores()
+    assert stores[0]["domain"] == "example.myshopify.com"
 

@@ -20,6 +20,13 @@ CONFIG = {
 _key_re = re.compile(r"^(.*)_API_KEY$")
 
 
+def _normalize_domain(domain: str) -> str:
+    """Strip scheme and trailing path from the given domain string."""
+    domain = re.sub(r"^https?://", "", domain, flags=re.I)
+    # keep only the hostname portion
+    return domain.split("/")[0].rstrip("/")
+
+
 def _stores_from_individual_vars() -> List[Dict[str, str]]:
     """Build store list from *_API_KEY / *_PASSWORD / *_DOMAIN env‑vars."""
     env = os.environ
@@ -42,7 +49,7 @@ def _stores_from_individual_vars() -> List[Dict[str, str]]:
                 "name": store_id.lower(),          # e.g. "irrakids"
                 "api_key": value,
                 "password": env[pwd_var],
-                "domain": env[dom_var],
+                "domain": _normalize_domain(env[dom_var]),
             }
         )
     return stores
@@ -57,7 +64,11 @@ def _stores() -> List[Dict[str, str]]:
     json_blob = os.getenv("SHOPIFY_STORES_JSON")
     if json_blob:
         try:
-            return json.loads(json_blob)
+            stores = json.loads(json_blob)
+            for s in stores:
+                if "domain" in s:
+                    s["domain"] = _normalize_domain(s["domain"])
+            return stores
         except json.JSONDecodeError as e:
             raise RuntimeError("SHOPIFY_STORES_JSON is not valid JSON") from e
 
