@@ -21,8 +21,8 @@ _barcode_re = re.compile(r"\d+")
 # Tags that identify the delivery company. Only these should be surfaced by the
 # application when reporting scan results.
 DELIVERY_TAGS = [
-    "k",
     "big",
+    "k",
     "12livery",
     "12livrey",
     "fast",
