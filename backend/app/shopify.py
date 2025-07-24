@@ -134,11 +134,12 @@ async def find_order(order_name: str) -> Dict[str, str]:
                     if created < cutoff:
                         break  # too old
                     best = {
-                        "tags": order.get("tags", ""),
-                        "fulfillment": order.get(
-                            "fulfillment_status",
-                            "unfulfilled",
-                        ),
+                        # Shopify may return null for certain fields. Fallback
+                        # to sensible defaults in that case so downstream code
+                        # can safely rely on string values.
+                        "tags": order.get("tags") or "",
+                        "fulfillment": order.get("fulfillment_status")
+                        or "unfulfilled",
                         "status": (
                             "closed" if order.get("cancelled_at") else "open"
                         ),

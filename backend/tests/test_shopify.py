@@ -41,3 +41,24 @@ def test_normalize_domain_env(monkeypatch):
     stores = shopify._stores()
     assert stores[0]["domain"] == "example.myshopify.com"
 
+
+def test_fulfillment_defaults_to_unfulfilled(monkeypatch):
+    async def fake_fetch_order(session, store, name):
+        return {
+            "tags": "",
+            "fulfillment_status": None,
+            "created_at": datetime.datetime.utcnow().isoformat() + "Z",
+            "cancelled_at": None,
+        }
+
+    monkeypatch.setattr(shopify, "_fetch_order", fake_fetch_order)
+    monkeypatch.setattr(
+        shopify,
+        "_stores",
+        lambda: [{"name": "test", "api_key": "x", "password": "y", "domain": "z"}],
+    )
+
+    result = asyncio.run(shopify.find_order("#123"))
+    assert result["fulfillment"] == "unfulfilled"
+    assert result["result"] == "❌ Unfulfilled"
+

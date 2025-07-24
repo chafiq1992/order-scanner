@@ -2,6 +2,7 @@ import asyncio
 from pathlib import Path
 import os
 import sys
+import datetime
 
 import pytest
 from fastapi.testclient import TestClient
@@ -116,3 +117,33 @@ def test_scan_invalid_barcode(client):
     resp = client.post("/scan", json={"barcode": "abc"})
     assert resp.status_code == 400
     assert resp.json()["detail"] == "❌ Invalid barcode"
+
+
+def test_unfulfilled_order_no_tag(client, monkeypatch):
+    async def fake_fetch_order(session, store, name):
+        return {
+            "tags": "",
+            "fulfillment_status": None,
+            "created_at": datetime.datetime.utcnow().isoformat() + "Z",
+            "cancelled_at": None,
+        }
+
+    import importlib
+    from backend.app import main as main_mod
+    from backend.app import shopify as shopify_mod
+
+    shopify = importlib.reload(shopify_mod)
+    monkeypatch.setattr(main_mod, "shopify", shopify)
+    monkeypatch.setattr(shopify, "_fetch_order", fake_fetch_order)
+    monkeypatch.setattr(
+        shopify,
+        "_stores",
+        lambda: [{"name": "test", "api_key": "x", "password": "y", "domain": "z"}],
+    )
+
+    resp = client.post("/scan", json={"barcode": "777"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["result"] == "❌ Unfulfilled order with no tag — not added"
+    assert data["order"] == "#777"
+    assert data["tag"] == ""
