@@ -90,3 +90,22 @@ def test_fetch_order_uses_query_params():
 
     assert captured["params"] == {"status": "any", "name": "#123"}
 
+
+def test_fetch_order_empty_list_returns_none():
+    class FakeResp:
+        status = 200
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, exc_type, exc, tb):
+            pass
+        async def json(self):
+            return {"orders": []}
+
+    class FakeSession:
+        def get(self, url, headers=None, params=None):
+            return FakeResp()
+
+    store = {"domain": "example.myshopify.com", "api_key": "k", "password": "p"}
+
+    result = asyncio.run(shopify._fetch_order(FakeSession(), store, "#123"))
+    assert result is None

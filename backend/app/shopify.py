@@ -97,7 +97,11 @@ async def _fetch_order(
         if r.status != 200:
             raise RuntimeError(f"{store['name']} responded {r.status}")
         data = await r.json()
-    return data.get("orders", [None])[0]
+
+    orders = data.get("orders")
+    if not orders:
+        return None
+    return orders[0]
 
 # ---------------- public API ------------------
 
