@@ -147,3 +147,21 @@ def test_unfulfilled_order_no_tag(client, monkeypatch):
     assert data["result"] == "❌ Unfulfilled order with no tag — not added"
     assert data["order"] == "#777"
     assert data["tag"] == ""
+
+
+def test_scan_filters_tags(client, monkeypatch):
+    async def custom_find_order(order_name: str):
+        return {
+            "tags": "cod 24/07/25, FAST, urgent",
+            "fulfillment": "fulfilled",
+            "status": "open",
+            "store": "main",
+            "result": "✅ OK",
+        }
+
+    monkeypatch.setattr("backend.app.shopify.find_order", custom_find_order)
+
+    resp = client.post("/scan", json={"barcode": "321"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["tag"] == "fast"

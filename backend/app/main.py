@@ -18,6 +18,27 @@ app = FastAPI(title="Order‑Scanner API", lifespan=lifespan)
 
 _barcode_re = re.compile(r"\d+")
 
+# Tags that identify the delivery company. Only these should be surfaced by the
+# application when reporting scan results.
+DELIVERY_TAGS = [
+    "k",
+    "big",
+    "12livery",
+    "12livrey",
+    "fast",
+    "oscario",
+    "sand",
+]
+
+
+def _detect_delivery_tag(tag_str: str) -> str:
+    """Return the first known delivery tag found in *tag_str* (case-insensitive)."""
+    low = (tag_str or "").lower()
+    for tag in DELIVERY_TAGS:
+        if tag in low:
+            return tag
+    return ""
+
 
 def _clean(barcode: str) -> str:
     digits = _barcode_re.findall(barcode)
@@ -42,7 +63,7 @@ async def scan(data: ScanIn):
             return ScanOut(
                 result="⚠️ Already Scanned",
                 order=row.order_name,
-                tag=row.tags,
+                tag=_detect_delivery_tag(row.tags),
                 ts=row.ts,
             )
 
@@ -56,6 +77,7 @@ async def scan(data: ScanIn):
             ts=datetime.utcnow()
         )
 
+    delivery_tag = _detect_delivery_tag(order.get("tags", ""))
     scan = models.Scan(
         order_name=order_name,
         tags=order.get("tags", ""),
@@ -80,7 +102,7 @@ async def scan(data: ScanIn):
     return ScanOut(
         result=scan.result,
         order=order_name,
-        tag=scan.tags,
+        tag=delivery_tag,
         ts=scan.ts,
     )
 
@@ -89,15 +111,7 @@ async def scan(data: ScanIn):
 async def tag_summary():
     async with database.AsyncSessionLocal() as db:
         q = await db.execute(text("SELECT tags FROM scans"))
-        counts = {
-            "k": 0,
-            "big": 0,
-            "12livery": 0,
-            "12livrey": 0,
-            "fast": 0,
-            "oscario": 0,
-            "sand": 0,
-        }
+        counts = {tag: 0 for tag in DELIVERY_TAGS}
         for (t,) in q:
             low = (t or "").lower()
             for k in counts:
