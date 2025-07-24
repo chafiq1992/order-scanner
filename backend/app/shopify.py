@@ -20,6 +20,20 @@ CONFIG = {
 _key_re = re.compile(r"^(.*)_API_KEY$")
 
 
+def _sanitize_domain(raw: str) -> str:
+    """Strip schemes and paths from a Shopify domain string."""
+    domain = raw.strip()
+    if not domain:
+        raise RuntimeError("Invalid store domain: empty string")
+    if "://" in domain:
+        domain = domain.split("://", 1)[1]
+    domain = domain.split("/", 1)[0]
+    domain = domain.strip()
+    if not domain or "/" in domain:
+        raise RuntimeError(f"Invalid store domain: {raw}")
+    return domain
+
+
 def _stores_from_individual_vars() -> List[Dict[str, str]]:
     """Build store list from *_API_KEY / *_PASSWORD / *_DOMAIN env‑vars."""
     env = os.environ
@@ -39,10 +53,10 @@ def _stores_from_individual_vars() -> List[Dict[str, str]]:
             )
         stores.append(
             {
-                "name": store_id.lower(),          # e.g. "irrakids"
+                "name": store_id.lower(),  # e.g. "irrakids"
                 "api_key": value,
                 "password": env[pwd_var],
-                "domain": env[dom_var],
+                "domain": _sanitize_domain(env[dom_var]),
             }
         )
     return stores
@@ -57,9 +71,12 @@ def _stores() -> List[Dict[str, str]]:
     json_blob = os.getenv("SHOPIFY_STORES_JSON")
     if json_blob:
         try:
-            return json.loads(json_blob)
+            stores = json.loads(json_blob)
         except json.JSONDecodeError as e:
             raise RuntimeError("SHOPIFY_STORES_JSON is not valid JSON") from e
+        for store in stores:
+            store["domain"] = _sanitize_domain(store["domain"])
+        return stores
 
     # fall back to individual env-vars
     return _stores_from_individual_vars()
