@@ -170,6 +170,8 @@ def test_scan_filters_tags(client, monkeypatch):
 def test_detect_delivery_tag_exact_match():
     assert _detect_delivery_tag("fast, urgent") == "fast"
     assert _detect_delivery_tag("K, other") == "k"
+    # whitespace should also work as a delimiter
+    assert _detect_delivery_tag("fast urgent") == "fast"
     # partial words should not match
     assert _detect_delivery_tag("snack") == ""
 

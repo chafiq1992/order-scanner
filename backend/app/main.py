@@ -32,13 +32,20 @@ DELIVERY_TAGS = [
 
 
 def _detect_delivery_tag(tag_str: str) -> str:
-    """Return the first known delivery tag found in *tag_str* (case-insensitive).
+    """Return the first known delivery tag found in *tag_str*.
 
-    The *tag_str* may contain a comma separated list of tags.  Each token is
-    matched individually against :data:`DELIVERY_TAGS` using case-insensitive
-    equality.
+    Shopify stores tags as a comma separated list, however some installations
+    have been observed to use spaces instead.  To make the detection more
+    resilient we split the string on commas **and** whitespace.  Each resulting
+    token is then matched (case-insensitively) against
+    :data:`DELIVERY_TAGS`.
     """
-    tokens = [(t or "").strip().lower() for t in (tag_str or "").split(",")]
+
+    import re
+
+    tokens = re.split(r"[,\s]+", tag_str or "")
+    tokens = [t.strip().lower() for t in tokens if t.strip()]
+
     for tag in DELIVERY_TAGS:
         for tok in tokens:
             if tok == tag:
