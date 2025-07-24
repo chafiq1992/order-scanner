@@ -19,9 +19,7 @@ export default function App() {
   const readerRef = useRef(null);
   const scannerRef = useRef(null);
   const [tab, setTab] = useState("scan");
-  const [result, setResult] = useState(
-    'Click "Start Scan" to begin scanning orders'
-  );
+  const [result, setResult] = useState("");
   const [resultClass, setResultClass] = useState("");
   const [orders, setOrders] = useState([]);
   const [summary, setSummary] = useState({});
@@ -210,9 +208,11 @@ export default function App() {
               ref={readerRef}
               className={scanning ? "scanning" : ""}
             ></div>
-            <div id="result" className={resultClass}>
-              {result}
-            </div>
+            {result && (
+              <div id="result" className={resultClass}>
+                {result}
+              </div>
+            )}
           </div>
           <div id="scan-log">
             <div className="section-header">
@@ -234,9 +234,6 @@ export default function App() {
             </ul>
           </div>
           <div className="bottom-bar">
-            <div className="section-header">
-              <span>📊</span>Tag Summary
-            </div>
             <div id="tagSummary">
               {Object.entries(summary)
                 .sort((a, b) => b[1] - a[1])
