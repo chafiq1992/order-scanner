@@ -14,7 +14,6 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(models.Base.metadata.create_all)
     yield
 
-
 app = FastAPI(title="Order‑Scanner API", lifespan=lifespan)
 
 _barcode_re = re.compile(r"\d+")
