@@ -57,6 +57,18 @@ export default function App() {
     }
   }, [tab, scanDate, scanTag]);
 
+  function hideLibraryInfo() {
+    const root = readerRef.current;
+    if (!root) return;
+    const infoIcon = root.querySelector('img[alt="Info icon"]');
+    if (infoIcon) infoIcon.remove();
+    root.querySelectorAll('div').forEach((d) => {
+      if (d.textContent && d.textContent.includes('Powered by')) {
+        d.remove();
+      }
+    });
+  }
+
   function startScanner() {
     setResult("📱 Point your camera at a QR code...");
     setResultClass("");
@@ -78,14 +90,16 @@ export default function App() {
     if (!qr) {
       qr = new Html5Qrcode(readerRef.current.id);
       scannerRef.current = qr;
-      qr.start({ facingMode: "environment" }, config, onScan, () => {})
+      qr
+        .start({ facingMode: "environment" }, config, onScan, () => {})
+        .then(hideLibraryInfo)
         .catch(() => {
           handleScanError("Camera access denied or not available");
           setScanning(false);
           setShowStart(true);
         });
     } else {
-      qr.resume();
+      qr.resume().then(hideLibraryInfo);
     }
   }
 
@@ -208,7 +222,12 @@ export default function App() {
               {displayedOrders.map((o, i) => (
                 <li key={i} className={`order-item ${statusClass(o.result)}`}>
                   <span className="order-name">{o.order}</span>
-                  <span className={`order-tag ${statusClass(o.result)}`}>{o.tag || "No tag"}</span>
+                  <span
+                    className="order-tag"
+                    style={{ background: tagColors[(o.tag || "none").toLowerCase()] || tagColors["none"] }}
+                  >
+                    {o.tag || "No tag"}
+                  </span>
                   <span className="order-status-text">{o.result}</span>
                 </li>
               ))}
