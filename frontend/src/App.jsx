@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Html5Qrcode } from "html5-qrcode";
 
+// Allow using a relative URL when VITE_API_BASE_URL is undefined.
+const apiBase = import.meta.env.VITE_API_BASE_URL || "";
+
 const tagColors = {
   k: "#ffc0cb",
   big: "#fff176",
@@ -64,7 +67,7 @@ export default function App() {
 
   async function processScan(barcode) {
     try {
-      const resp = await fetch(`${import.meta.env.VITE_API_BASE_URL}/scan`, {
+      const resp = await fetch(`${apiBase}/scan`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ barcode }),
@@ -100,7 +103,7 @@ export default function App() {
   }
 
   async function fetchSummary() {
-    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/tag-summary`);
+    const res = await fetch(`${apiBase}/tag-summary`);
     const data = await res.json();
     setSummary(data);
   }
