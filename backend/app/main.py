@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from .schemas import ScanIn, ScanOut
 from . import shopify, database, models, sheets
-from sqlalchemy import select
+from sqlalchemy import select, text
 import os
 import re
 from contextlib import asynccontextmanager
@@ -89,7 +89,7 @@ async def scan(data: ScanIn):
 @app.get("/tag-summary")
 async def tag_summary():
     async with database.AsyncSessionLocal() as db:
-        q = await db.execute("SELECT tags FROM scans")
+        q = await db.execute(text("SELECT tags FROM scans"))
         counts = {
             "k": 0,
             "big": 0,
