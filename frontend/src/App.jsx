@@ -15,6 +15,19 @@ const tagColors = {
   none: "#f28b82",
 };
 
+function textColor(bg) {
+  if (!bg) return "#000";
+  let c = bg.replace("#", "");
+  if (c.length === 3) {
+    c = c.split("").map((x) => x + x).join("");
+  }
+  const r = parseInt(c.substr(0, 2), 16);
+  const g = parseInt(c.substr(2, 2), 16);
+  const b = parseInt(c.substr(4, 2), 16);
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return lum > 0.6 ? "#000" : "#fff";
+}
+
 export default function App() {
   const readerRef = useRef(null);
   const scannerRef = useRef(null);
@@ -28,6 +41,8 @@ export default function App() {
   const [scanning, setScanning] = useState(false);
   const [showStart, setShowStart] = useState(true);
   const [showAgain, setShowAgain] = useState(false);
+  const [filterTag, setFilterTag] = useState("");
+  const touchStartY = useRef(null);
 
   useEffect(() => {
     fetchSummary();
@@ -108,6 +123,33 @@ export default function App() {
     setSummary(data);
   }
 
+  const filteredOrders = filterTag
+    ? orders.filter((o) => o.tag === filterTag)
+    : orders;
+
+  const totalCount = Object.values(summary).reduce((a, b) => a + b, 0);
+
+  function handleTagClick(tag) {
+    setFilterTag(tag);
+  }
+
+  function onTouchStart(e) {
+    if (e.touches.length === 1) {
+      touchStartY.current = e.touches[0].clientY;
+    }
+  }
+
+  function onTouchEnd(e) {
+    if (touchStartY.current !== null) {
+      const dy = e.changedTouches[0].clientY - touchStartY.current;
+      if (dy > 50) {
+        fetchSummary();
+      }
+      touchStartY.current = null;
+    }
+  }
+
+
   return (
     <div className="container">
       <div className="header">
@@ -132,12 +174,16 @@ export default function App() {
           </button>
         )}
       </div>
-      <div id="scan-log">
+      <div id="scan-log" onDoubleClick={() => setFilterTag("")}>
         <div className="section-header">
           <span>📋</span>Recent Scans
         </div>
-        <ul id="orderList">
-          {orders.map((o, i) => (
+        <ul
+          id="orderList"
+          onTouchStart={onTouchStart}
+          onTouchEnd={onTouchEnd}
+        >
+          {filteredOrders.map((o, i) => (
             <li key={i} className={`order-item ${statusClass(o.result)}`}>
               <div className="order-status">
                 <span
@@ -146,38 +192,43 @@ export default function App() {
                 {o.result}
               </div>
               <div className="order-details">
-                <span className="order-name">{o.order}</span>
                 <span
                   className="order-tag"
-                  style={{ background: tagColors[o.tag] || tagColors["none"] }}
+                  style={{
+                    background: tagColors[o.tag] || tagColors["none"],
+                    color: textColor(tagColors[o.tag] || tagColors["none"]),
+                  }}
                 >
                   {o.tag || "No tag"}
                 </span>
+                <span className="order-name">{o.order}</span>
               </div>
             </li>
           ))}
         </ul>
-        <div className="section-header">
-          <span>📊</span>Tag Summary
-        </div>
-        <div id="tagSummary">
-          {Object.entries(summary)
-            .sort((a, b) => b[1] - a[1])
-            .map(([tag, count]) => (
-              <span
-                key={tag}
-                className="tag-count"
-                style={{ background: tagColors[tag] || tagColors["none"] }}
-              >
-                {count} × {tag}
-              </span>
-            ))}
-          {Object.keys(summary).length === 0 && (
-            <span style={{ color: "#6b7280", fontStyle: "italic" }}>
-              No scans yet
+      </div>
+      <div id="tagBar">
+        <span
+          className={`tag-chip ${filterTag === "" ? "active" : ""}`}
+          onClick={() => handleTagClick("")}
+        >
+          ALL ({totalCount})
+        </span>
+        {Object.entries(summary)
+          .sort((a, b) => b[1] - a[1])
+          .map(([tag, count]) => (
+            <span
+              key={tag}
+              className={`tag-chip ${filterTag === tag ? "active" : ""}`}
+              style={{
+                background: tagColors[tag] || tagColors["none"],
+                color: textColor(tagColors[tag] || tagColors["none"]),
+              }}
+              onClick={() => handleTagClick(tag)}
+            >
+              {tag.toUpperCase()} ({count})
             </span>
-          )}
-        </div>
+          ))}
       </div>
       <audio id="successSound" preload="auto">
         <source
