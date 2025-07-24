@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException
-from fastapi.staticfiles import StaticFiles        # ← NEW
+from fastapi.staticfiles import StaticFiles
 from .schemas import ScanIn, ScanOut
 from . import shopify, database, models, sheets
 from sqlalchemy import select
@@ -15,10 +15,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Order‑Scanner API")
-
-static_path = os.getenv("STATIC_FILES_PATH", "static")
-app.mount("/", StaticFiles(directory=static_path, html=True), name="static")
+app = FastAPI(title="Order‑Scanner API", lifespan=lifespan)
 
 _barcode_re = re.compile(r"\d+")
 
@@ -113,4 +110,9 @@ async def tag_summary():
 @app.get("/health")
 def health():
     return {"ok": True}
+
+
+# Serve built frontend files if available
+static_path = os.getenv("STATIC_FILES_PATH", "static")
+app.mount("/", StaticFiles(directory=static_path, html=True), name="static")
 

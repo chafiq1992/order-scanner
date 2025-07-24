@@ -39,7 +39,9 @@ npm run build
 This produces a `dist/` folder that can be served by the API container.  When
 developing locally with `npm run dev` make sure the `VITE_API_BASE_URL`
 environment variable points at your API instance so the app can reach the
-backend.
+backend. The build step can also make use of this variable, but if it is not
+defined the UI will fall back to using the same origin as the page, which works
+for single-container deployments.
 
 ## Running the Tests
 
