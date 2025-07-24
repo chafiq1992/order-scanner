@@ -4,7 +4,7 @@ sqlalchemy~=2.0.41
 asyncpg
 aiohttp
 pydantic
-gspread==6.*        # optional Google Sheets
+gspread==6.* 
 google-auth
 python-multipart
 httpx
