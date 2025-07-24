@@ -1,0 +1,31 @@
+# cloudbuild.yaml ─ Continuous build + deploy to Cloud Run
+substitutions:
+  _SERVICE: orderscan
+  _REGION: europe-west1
+  _IMAGE: gcr.io/$PROJECT_ID/orderscan:$SHORT_SHA
+
+steps:
+# 1 Build image
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '-t', '${_IMAGE}', '.']
+
+# 2 Push image
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['push', '${_IMAGE}']
+
+# 3 Deploy to Cloud Run
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  entrypoint: gcloud
+  args:
+    - run
+    - deploy
+    - '${_SERVICE}'
+    - '--image'
+    - '${_IMAGE}'
+    - '--region'
+    - '${_REGION}'
+    - '--quiet'
+    - '--allow-unauthenticated'
+
+images:
+- '${_IMAGE}'
