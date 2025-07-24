@@ -151,7 +151,7 @@ def health():
     return {"ok": True}
 
 
-# Serve built frontend files if available
+# Serve built frontend files if
 static_path = os.getenv("STATIC_FILES_PATH", "static")
 app.mount("/", StaticFiles(directory=static_path, html=True), name="static")
 
