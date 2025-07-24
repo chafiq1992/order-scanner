@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, Integer
+from sqlalchemy import Column, String, DateTime, Integer, Boolean
 from .database import Base
 from datetime import datetime
 
@@ -13,3 +13,5 @@ class Scan(Base):
     status = Column(String)
     store = Column(String)
     result = Column(String)
+    driver = Column(String, default="")
+    cod = Column(Boolean, default=False)

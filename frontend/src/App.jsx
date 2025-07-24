@@ -18,6 +18,7 @@ const tagColors = {
 export default function App() {
   const readerRef = useRef(null);
   const scannerRef = useRef(null);
+  const [tab, setTab] = useState("scan");
   const [result, setResult] = useState(
     'Click "Start Scan" to begin scanning orders'
   );
@@ -28,6 +29,11 @@ export default function App() {
   const [scanning, setScanning] = useState(false);
   const [showStart, setShowStart] = useState(true);
   const [showAgain, setShowAgain] = useState(false);
+  const [scanRows, setScanRows] = useState([]);
+  const [scanDate, setScanDate] = useState(new Date().toISOString().slice(0, 10));
+  const [scanTag, setScanTag] = useState("");
+  const [toast, setToast] = useState("");
+  const [flashRow, setFlashRow] = useState(null);
 
   useEffect(() => {
     fetchSummary();
@@ -44,6 +50,12 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem("orders", JSON.stringify(orders));
   }, [orders]);
+
+  useEffect(() => {
+    if (tab === "list") {
+      fetchScans();
+    }
+  }, [tab, scanDate, scanTag]);
 
   function startScanner() {
     setResult("📱 Point your camera at a QR code...");
@@ -120,84 +132,239 @@ export default function App() {
     setSummary(data);
   }
 
+  async function fetchScans() {
+    const url = new URL(`${apiBase}/scans`, window.location.origin);
+    url.searchParams.set("date", scanDate);
+    if (scanTag) url.searchParams.set("tag", scanTag);
+    const res = await fetch(url.toString());
+    const data = await res.json();
+    setScanRows(data);
+  }
+
+  async function updateScan(id, payload) {
+    const res = await fetch(`${apiBase}/scans/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      setToast("Saved \u2713");
+      setFlashRow(id);
+      setTimeout(() => setFlashRow(null), 1000);
+      fetchScans();
+    }
+  }
+
   const displayedOrders = filterTag
     ? orders.filter((o) => (o.tag || "").toLowerCase() === filterTag)
     : orders;
 
+  const listTagCounts = {};
+  scanRows.forEach((r) => {
+    const t = detectTag(r.tags);
+    listTagCounts[t] = (listTagCounts[t] || 0) + 1;
+  });
+
+  const displayedList = scanTag
+    ? scanRows.filter((r) => detectTag(r.tags) === scanTag)
+    : scanRows;
+
   return (
     <div className="container">
-      <div className="header">
-        <h1>📦 Order Scanner</h1>
-        <div
-          id="reader"
-          ref={readerRef}
-          className={scanning ? "scanning" : ""}
-        ></div>
-        <div id="result" className={resultClass}>
-          {result}
-        </div>
+      <div className="tab-bar">
+        <button
+          className={tab === "scan" ? "active" : ""}
+          onClick={() => setTab("scan")}
+        >
+          Scan
+        </button>
+        <button
+          className={tab === "list" ? "active" : ""}
+          onClick={() => setTab("list")}
+        >
+          Scanned Orders
+        </button>
       </div>
-      <div id="scan-log">
-        <div className="section-header">
-          <span>📋</span>Recent Scans
-        </div>
-        <ul id="orderList">
-          {displayedOrders.map((o, i) => (
-            <li key={i} className={`order-item ${statusClass(o.result)}`}>
-              <div className="order-status">
-                <span
-                  className={`status-indicator ${statusClass(o.result)}`}
-                ></span>
-                {o.result}
-              </div>
-              <div className="order-details">
-                <span
-                  className={`order-tag ${statusClass(o.result)}`}
-                >
-                  {o.tag || "No tag"}
+      {toast && <div className="toast">{toast}</div>}
+      {tab === "scan" && (
+        <>
+          <div className="header">
+            <h1>📦 Order Scanner</h1>
+            <div
+              id="reader"
+              ref={readerRef}
+              className={scanning ? "scanning" : ""}
+            ></div>
+            <div id="result" className={resultClass}>
+              {result}
+            </div>
+          </div>
+          <div id="scan-log">
+            <div className="section-header">
+              <span>📋</span>Recent Scans
+            </div>
+            <ul id="orderList">
+              {displayedOrders.map((o, i) => (
+                <li key={i} className={`order-item ${statusClass(o.result)}`}>
+                  <div className="order-status">
+                    <span
+                      className={`status-indicator ${statusClass(o.result)}`}
+                    ></span>
+                    {o.result}
+                  </div>
+                  <div className="order-details">
+                    <span className={`order-tag ${statusClass(o.result)}`}>
+                      {o.tag || "No tag"}
+                    </span>
+                    <span className="order-name">{o.order}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="bottom-bar">
+            <div className="section-header">
+              <span>📊</span>Tag Summary
+            </div>
+            <div id="tagSummary">
+              {Object.entries(summary)
+                .sort((a, b) => b[1] - a[1])
+                .map(([tag, count]) => (
+                  <span
+                    key={tag}
+                    className={`tag-count ${
+                      filterTag === tag.toLowerCase() ? "active" : ""
+                    }`}
+                    style={{ background: tagColors[tag] || tagColors["none"] }}
+                    onClick={() =>
+                      setFilterTag((cur) =>
+                        cur === tag.toLowerCase() ? "" : tag.toLowerCase()
+                      )
+                    }
+                  >
+                    {count} × {tag}
+                  </span>
+                ))}
+              {Object.keys(summary).length === 0 && (
+                <span style={{ color: "#6b7280", fontStyle: "italic" }}>
+                  No scans yet
                 </span>
-                <span className="order-name">{o.order}</span>
-              </div>
-            </li>
-          ))}
-        </ul>
-      </div>
-      <div className="bottom-bar">
-        <div className="section-header">
-          <span>📊</span>Tag Summary
-        </div>
-        <div id="tagSummary">
-          {Object.entries(summary)
-            .sort((a, b) => b[1] - a[1])
-            .map(([tag, count]) => (
+              )}
+            </div>
+            {showStart && (
+              <button className="scan-btn" id="scanBtn" onClick={startScanner}>
+                <span className="emoji">📷</span>Scan
+              </button>
+            )}
+            {showAgain && (
+              <button className="scan-btn" id="againBtn" onClick={startScanner}>
+                <span className="emoji">🔄</span>Scan Again
+              </button>
+            )}
+          </div>
+        </>
+      )}
+      {tab === "list" && (
+        <div className="table-card">
+          <div className="filters">
+            <input
+              type="date"
+              value={scanDate}
+              onChange={(e) => setScanDate(e.target.value)}
+            />
+            <div className="tag-pills">
               <span
-                key={tag}
-                className={`tag-count ${filterTag === tag.toLowerCase() ? "active" : ""}`}
-                style={{ background: tagColors[tag] || tagColors["none"] }}
-                onClick={() =>
-                  setFilterTag((cur) => (cur === tag.toLowerCase() ? "" : tag.toLowerCase()))
-                }
+                className={`tag-pill ${scanTag === "" ? "active" : ""}`}
+                onClick={() => setScanTag("")}
               >
-                {count} × {tag}
+                All
               </span>
-            ))}
-          {Object.keys(summary).length === 0 && (
-            <span style={{ color: "#6b7280", fontStyle: "italic" }}>
-              No scans yet
-            </span>
-          )}
+              {Object.entries(listTagCounts).map(([tag, count]) => (
+                <span
+                  key={tag}
+                  className={`tag-pill ${scanTag === tag ? "active" : ""}`}
+                  style={{ background: tagColors[tag] || tagColors["none"] }}
+                  onClick={() =>
+                    setScanTag((cur) => (cur === tag ? "" : tag))
+                  }
+                >
+                  {tag.toUpperCase()} ({count})
+                </span>
+              ))}
+            </div>
+          </div>
+          <table className="scans-table">
+            <thead>
+              <tr>
+                <th>Order #</th>
+                <th>Status</th>
+                <th>Tag</th>
+                <th>COD</th>
+                <th>Scan Time</th>
+                <th>Driver</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {displayedList.map((r) => (
+                <tr
+                  key={r.id}
+                  className={`${
+                    !detectTag(r.tags) ? "missing-tag" : ""
+                  } ${flashRow === r.id ? "flash" : ""}`}
+                >
+                  <td><strong>{r.order_name}</strong></td>
+                  <td>
+                    <select
+                      value={r.status || ""}
+                      onChange={(e) =>
+                        updateScan(r.id, { status: e.target.value })
+                      }
+                    >
+                      <option>Pending</option>
+                      <option>Dispatched</option>
+                      <option>Delivered</option>
+                    </select>
+                  </td>
+                  <td>
+                    <select
+                      value={detectTag(r.tags)}
+                      onChange={(e) => updateScan(r.id, { tags: e.target.value })}
+                    >
+                      {Object.keys(tagColors).map((t) => (
+                        <option key={t} value={t}>
+                          {t}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>{r.cod ? "Y" : "N"}</td>
+                  <td>{new Date(r.ts).toLocaleTimeString()}</td>
+                  <td>
+                    <select
+                      value={r.driver || ""}
+                      onChange={(e) =>
+                        updateScan(r.id, { driver: e.target.value })
+                      }
+                    >
+                      <option value="">-</option>
+                      <option>Alice</option>
+                      <option>Bob</option>
+                      <option>Charlie</option>
+                    </select>
+                  </td>
+                  <td></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="totals">
+            Total scanned today: {scanRows.length} orders |
+            Current view: {displayedList.length}
+            {scanTag ? ` ${scanTag.toUpperCase()}` : ""}
+          </div>
         </div>
-        {showStart && (
-          <button className="scan-btn" id="scanBtn" onClick={startScanner}>
-            <span className="emoji">📷</span>Scan
-          </button>
-        )}
-        {showAgain && (
-          <button className="scan-btn" id="againBtn" onClick={startScanner}>
-            <span className="emoji">🔄</span>Scan Again
-          </button>
-        )}
-      </div>
+      )}
       <audio id="successSound" preload="auto">
         <source
           src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEALB8AAFgWAQACABAAZGF0YQoGAACBhYqHbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt5Y0rBjiR1/LBciUFLYPQ8diJMwgZZ7zs5Y0rBzqS1/LDcSIEK4bT8tiKMwgZZ7vs5I4rBzqS2O3CcSIEK4bT8tiKMwgZZ7vs5Y4rBjmR2PD/////iYmJiYmJiYmJiYmJiYmJ"
@@ -250,4 +417,9 @@ function playErrorSound() {
   audio.play().catch(() => {
     if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 200]);
   });
+}
+
+function detectTag(tagStr) {
+  const tokens = (tagStr || "").split(/[,\s]+/).map((t) => t.toLowerCase().trim());
+  return Object.keys(tagColors).find((t) => tokens.includes(t)) || "";
 }

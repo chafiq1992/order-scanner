@@ -13,3 +13,22 @@ class ScanOut(BaseModel):
     order: str
     tag: str
     ts: datetime
+
+
+class ScanRecord(BaseModel):
+    id: int
+    ts: datetime
+    order_name: str
+    tags: str | None
+    fulfillment: str | None
+    status: str | None
+    store: str | None
+    result: str | None
+    driver: str | None = ""
+    cod: bool | None = False
+
+
+class ScanUpdate(BaseModel):
+    tags: str | None = None
+    driver: str | None = None
+    status: str | None = None
