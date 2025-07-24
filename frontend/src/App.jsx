@@ -310,10 +310,7 @@ export default function App() {
                 <th>Order #</th>
                 <th>Status</th>
                 <th>Tag</th>
-                <th>COD</th>
                 <th>Scan Time</th>
-                <th>Driver</th>
-                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -332,9 +329,8 @@ export default function App() {
                         updateScan(r.id, { status: e.target.value })
                       }
                     >
-                      <option>Pending</option>
-                      <option>Dispatched</option>
-                      <option>Delivered</option>
+                      <option>Fulfilled</option>
+                      <option>Unfulfilled</option>
                     </select>
                   </td>
                   <td>
@@ -349,22 +345,7 @@ export default function App() {
                       ))}
                     </select>
                   </td>
-                  <td>{r.cod ? "Y" : "N"}</td>
                   <td>{new Date(r.ts).toLocaleTimeString()}</td>
-                  <td>
-                    <select
-                      value={r.driver || ""}
-                      onChange={(e) =>
-                        updateScan(r.id, { driver: e.target.value })
-                      }
-                    >
-                      <option value="">-</option>
-                      <option>Alice</option>
-                      <option>Bob</option>
-                      <option>Charlie</option>
-                    </select>
-                  </td>
-                  <td></td>
                 </tr>
               ))}
             </tbody>
