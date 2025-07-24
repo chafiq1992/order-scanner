@@ -205,3 +205,33 @@ def test_tag_summary_counts(client, monkeypatch):
     after = client.get("/tag-summary").json()
     assert after.get("fast") >= before.get("fast") + 1
     assert after.get("k") >= before.get("k") + 1
+
+
+def test_tag_summary_by_store(client, monkeypatch):
+    async def custom_find_order(order_name: str):
+        if order_name == "#601":
+            return {
+                "tags": "fast",
+                "fulfillment": "fulfilled",
+                "status": "open",
+                "store": "irrakids",
+                "result": "✅ OK",
+            }
+        return {
+            "tags": "k",
+            "fulfillment": "fulfilled",
+            "status": "open",
+            "store": "irranova",
+            "result": "✅ OK",
+        }
+
+    monkeypatch.setattr("backend.app.shopify.find_order", custom_find_order)
+
+    before = client.get("/tag-summary/by-store").json()
+
+    client.post("/scan", json={"barcode": "601"})
+    client.post("/scan", json={"barcode": "602"})
+
+    after = client.get("/tag-summary/by-store").json()
+    assert after.get("irrakids", {}).get("fast", 0) >= before.get("irrakids", {}).get("fast", 0) + 1
+    assert after.get("irranova", {}).get("k", 0) >= before.get("irranova", {}).get("k", 0) + 1

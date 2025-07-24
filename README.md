@@ -67,6 +67,20 @@ pip install -r backend/requirements.txt
 pytest
 ```
 
+## API Usage
+
+### Tag Summary by Store
+
+Send a `GET` request to `/tag-summary/by-store` to retrieve delivery tag counts
+separated by Shopify store. The response groups tags for each store:
+
+```json
+{
+  "irrakids": {"fast": 3, "k": 2},
+  "irranova": {"fast": 1}
+}
+```
+
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
