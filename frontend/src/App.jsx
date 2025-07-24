@@ -29,6 +29,7 @@ export default function App() {
   const [scanning, setScanning] = useState(false);
   const [showStart, setShowStart] = useState(true);
   const [showAgain, setShowAgain] = useState(false);
+  const [pending, setPending] = useState("");
   const [scanRows, setScanRows] = useState([]);
   const [scanDate, setScanDate] = useState(new Date().toISOString().slice(0, 10));
   const [scanTag, setScanTag] = useState("");
@@ -58,6 +59,7 @@ export default function App() {
   }, [tab, scanDate, scanTag]);
 
   function startScanner() {
+    setPending("");
     setResult("📱 Point your camera at a QR code...");
     setResultClass("");
     setScanning(true);
@@ -67,12 +69,11 @@ export default function App() {
     let qr = scannerRef.current;
     const config = { fps: 10, qrbox: 250 };
     const onScan = (code) => {
-      if (navigator.vibrate) navigator.vibrate(200);
+      if (navigator.vibrate) navigator.vibrate(100);
+      setPending(code);
+      setResult(`Detected ${code}. Click Scan to confirm`);
       qr.pause(true);
       setScanning(false);
-      setShowAgain(true);
-      setResult("⏳ Processing scan...");
-      processScan(code);
     };
 
     if (!qr) {
@@ -101,6 +102,14 @@ export default function App() {
     } catch (e) {
       handleScanError("Server error");
     }
+  }
+
+  function confirmScan() {
+    if (!pending) return;
+    setResult("⏳ Processing scan...");
+    processScan(pending);
+    setPending("");
+    setShowAgain(true);
   }
 
   function handleScanError(msg) {
@@ -206,18 +215,9 @@ export default function App() {
             <ul id="orderList">
               {displayedOrders.map((o, i) => (
                 <li key={i} className={`order-item ${statusClass(o.result)}`}>
-                  <div className="order-status">
-                    <span
-                      className={`status-indicator ${statusClass(o.result)}`}
-                    ></span>
-                    {o.result}
-                  </div>
-                  <div className="order-details">
-                    <span className={`order-tag ${statusClass(o.result)}`}>
-                      {o.tag || "No tag"}
-                    </span>
-                    <span className="order-name">{o.order}</span>
-                  </div>
+                  <span className="order-name">{o.order}</span>
+                  <span className={`order-tag ${statusClass(o.result)}`}>{o.tag || "No tag"}</span>
+                  <span className="order-status-text">{o.result}</span>
                 </li>
               ))}
             </ul>
@@ -251,9 +251,14 @@ export default function App() {
                 </span>
               )}
             </div>
-            {showStart && (
+            {showStart && !pending && (
               <button className="scan-btn" id="scanBtn" onClick={startScanner}>
                 <span className="emoji">📷</span>Scan
+              </button>
+            )}
+            {pending && (
+              <button className="scan-btn" id="confirmBtn" onClick={confirmScan}>
+                <span className="emoji">✅</span>Scan
               </button>
             )}
             {showAgain && (
