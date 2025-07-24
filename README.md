@@ -1,6 +1,6 @@
 # Order Scanner
 
-Minimal reproduction of your Apps‑Script barcode scanner as a FastAPI + React stack ready for Google Cloud Run.
+Minimal reproduction of  your Apps‑Script barcode scanner as a FastAPI + React stack ready for Google Cloud Run.
 
 ## Environment Variables
 
