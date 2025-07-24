@@ -29,3 +29,10 @@ def test_find_order_returns_dict(monkeypatch):
     assert result["result"] == "✅ OK"
     assert result["store"] == "test"
 
+
+def test_sanitize_domain():
+    assert (
+        shopify._sanitize_domain("https://demo.myshopify.com/")
+        == "demo.myshopify.com"
+    )
+
