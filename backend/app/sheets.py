@@ -5,6 +5,7 @@ import gspread
 import asyncio
 from google.oauth2.service_account import Credentials
 
+
 _sheet_id = os.getenv("GOOGLE_SHEET_ID")
 _sa_b64 = os.getenv("GCP_SA_B64")
 
