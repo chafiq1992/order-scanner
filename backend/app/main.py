@@ -126,6 +126,21 @@ async def tag_summary():
     return counts
 
 
+@app.get("/tag-summary/by-store")
+async def tag_summary_by_store():
+    """Return tag counts grouped by store."""
+    async with database.AsyncSessionLocal() as db:
+        q = await db.execute(text("SELECT store, tags FROM scans"))
+        summary: dict[str, dict[str, int]] = {}
+        for store, tags in q:
+            store_counts = summary.setdefault(store, {tag: 0 for tag in DELIVERY_TAGS})
+            tokens = [(tok or "").strip().lower() for tok in (tags or "").split(",")]
+            for tok in tokens:
+                if tok in store_counts:
+                    store_counts[tok] += 1
+    return summary
+
+
 @app.get("/health")
 def health():
     return {"ok": True}
