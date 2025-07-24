@@ -7,11 +7,24 @@ import os
 import re
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
+from sqlalchemy import inspect
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with database.engine.begin() as conn:
         await conn.run_sync(models.Base.metadata.create_all)
+
+        def get_columns(sync_conn):
+            return [c["name"] for c in inspect(sync_conn).get_columns("scans")]
+
+        columns = await conn.run_sync(get_columns)
+
+        if "driver" not in columns:
+            await conn.execute(text("ALTER TABLE scans ADD COLUMN driver VARCHAR DEFAULT ''"))
+
+        if "cod" not in columns:
+            await conn.execute(text("ALTER TABLE scans ADD COLUMN cod BOOLEAN DEFAULT FALSE"))
+
     yield
 
 app = FastAPI(title="Order‑Scanner API", lifespan=lifespan)
