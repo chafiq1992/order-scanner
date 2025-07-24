@@ -62,3 +62,31 @@ def test_fulfillment_defaults_to_unfulfilled(monkeypatch):
     assert result["fulfillment"] == "unfulfilled"
     assert result["result"] == "❌ Unfulfilled"
 
+
+def test_fetch_order_uses_query_params():
+    captured = {}
+
+    class FakeResp:
+        status = 200
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            pass
+
+        async def json(self):
+            return {"orders": [None]}
+
+    class FakeSession:
+        def get(self, url, headers=None, params=None):
+            captured["url"] = url
+            captured["params"] = params
+            return FakeResp()
+
+    store = {"domain": "example.myshopify.com", "api_key": "k", "password": "p"}
+
+    asyncio.run(shopify._fetch_order(FakeSession(), store, "#123"))
+
+    assert captured["params"] == {"status": "any", "name": "#123"}
+

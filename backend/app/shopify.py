@@ -88,13 +88,11 @@ def _auth_hdr(api_key: str, password: str) -> Dict[str, str]:
 async def _fetch_order(
     session: aiohttp.ClientSession, store: Dict[str, str], name: str
 ) -> Dict[str, Any] | None:
-    url = (
-        f"https://{store['domain']}/admin/api/2023-07/orders.json?"
-        f"status=any&name={name}"
-    )
+    url = f"https://{store['domain']}/admin/api/2023-07/orders.json"
     async with session.get(
         url,
         headers=_auth_hdr(store["api_key"], store["password"]),
+        params={"status": "any", "name": name},
     ) as r:
         if r.status != 200:
             raise RuntimeError(f"{store['name']} responded {r.status}")
