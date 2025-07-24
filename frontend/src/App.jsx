@@ -29,7 +29,6 @@ export default function App() {
   const [scanning, setScanning] = useState(false);
   const [showStart, setShowStart] = useState(true);
   const [showAgain, setShowAgain] = useState(false);
-  const [pending, setPending] = useState("");
   const [scanRows, setScanRows] = useState([]);
   const [scanDate, setScanDate] = useState(new Date().toISOString().slice(0, 10));
   const [scanTag, setScanTag] = useState("");
@@ -59,7 +58,6 @@ export default function App() {
   }, [tab, scanDate, scanTag]);
 
   function startScanner() {
-    setPending("");
     setResult("📱 Point your camera at a QR code...");
     setResultClass("");
     setScanning(true);
@@ -67,13 +65,14 @@ export default function App() {
     setShowAgain(false);
 
     let qr = scannerRef.current;
-    const config = { fps: 10, qrbox: 250 };
+    const config = { fps: 10, qrbox: { width: 300, height: 200 } };
     const onScan = (code) => {
       if (navigator.vibrate) navigator.vibrate(100);
-      setPending(code);
-      setResult(`Detected ${code}. Click Scan to confirm`);
+      setResult("⏳ Processing scan...");
       qr.pause(true);
       setScanning(false);
+      processScan(code);
+      setShowAgain(true);
     };
 
     if (!qr) {
@@ -104,13 +103,6 @@ export default function App() {
     }
   }
 
-  function confirmScan() {
-    if (!pending) return;
-    setResult("⏳ Processing scan...");
-    processScan(pending);
-    setPending("");
-    setShowAgain(true);
-  }
 
   function handleScanError(msg) {
     setResult(`❌ Error: ${msg}`);
@@ -251,21 +243,16 @@ export default function App() {
                 </span>
               )}
             </div>
-            {showStart && !pending && (
-              <button className="scan-btn" id="scanBtn" onClick={startScanner}>
-                <span className="emoji">📷</span>Scan
-              </button>
-            )}
-            {pending && (
-              <button className="scan-btn" id="confirmBtn" onClick={confirmScan}>
-                <span className="emoji">✅</span>Scan
-              </button>
-            )}
-            {showAgain && (
-              <button className="scan-btn" id="againBtn" onClick={startScanner}>
-                <span className="emoji">🔄</span>Scan Again
-              </button>
-            )}
+              {showStart && (
+                <button className="scan-btn" id="scanBtn" onClick={startScanner}>
+                  <span className="emoji">📷</span>Scan
+                </button>
+              )}
+              {showAgain && (
+                <button className="scan-btn" id="againBtn" onClick={startScanner}>
+                  <span className="emoji">🔄</span>Scan Again
+                </button>
+              )}
           </div>
         </>
       )}
