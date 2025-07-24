@@ -17,6 +17,9 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Order‑Scanner API")
 
+static_path = os.getenv("STATIC_FILES_PATH", "static")
+app.mount("/", StaticFiles(directory=static_path, html=True), name="static")
+
 _barcode_re = re.compile(r"\d+")
 
 
@@ -111,6 +114,3 @@ async def tag_summary():
 def health():
     return {"ok": True}
 
-
-static_path = os.getenv("STATIC_FILES_PATH", "static")
-app.mount("/", StaticFiles(directory=static_path, html=True), name="static")
