@@ -237,3 +237,20 @@ def test_tag_summary_by_store(client, monkeypatch):
     after = client.get("/tag-summary/by-store").json()
     assert after.get("irrakids", {}).get("fast", 0) >= before.get("irrakids", {}).get("fast", 0) + 1
     assert after.get("irranova", {}).get("k", 0) >= before.get("irranova", {}).get("k", 0) + 1
+
+
+def test_list_and_update_scans(client):
+    today = datetime.datetime.utcnow().date().isoformat()
+    client.post("/scan", json={"barcode": "601"})
+    resp = client.get(f"/scans?date={today}")
+    assert resp.status_code == 200
+    scans = resp.json()
+    assert len(scans) >= 1
+    first_id = scans[0]["id"]
+
+    update = {"driver": "alice", "tags": "fast", "status": "dispatched"}
+    resp = client.patch(f"/scans/{first_id}", json=update)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["driver"] == "alice"
+    assert data["status"] == "dispatched"

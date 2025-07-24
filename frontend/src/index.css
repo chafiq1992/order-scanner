@@ -9,6 +9,22 @@ body {
   color: #333;
 }
 .container { max-width: 800px; margin: 0 auto; }
+.tab-bar { display:flex; gap:0.5rem; margin-bottom:1rem; justify-content:center; }
+.tab-bar button { padding:0.4rem 1rem; border:none; border-radius:8px; cursor:pointer; }
+.tab-bar .active { background:#4c51bf; color:#fff; }
+.toast { position:fixed; top:1rem; right:1rem; background:#10b981; color:#fff; padding:0.5rem 1rem; border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,0.2); }
+.table-card { background:#fff; padding:1rem; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,0.2); }
+.scans-table { width:100%; border-collapse:collapse; font-size:0.9rem; }
+.scans-table th, .scans-table td { padding:0.4rem; border-bottom:1px solid #ddd; }
+.scans-table tr:nth-child(even) { background:#f9f9f9; }
+.scans-table tr.flash { animation:flashBg 1s; }
+.scans-table tr.missing-tag { background:#fff8c5; }
+.filters { display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center; margin-bottom:0.5rem; }
+.tag-pills { display:flex; flex-wrap:wrap; gap:0.4rem; }
+.tag-pill { padding:0.3rem 0.6rem; border-radius:20px; cursor:pointer; background:#eee; }
+.tag-pill.active { outline:2px solid #4c51bf; }
+.totals { margin-top:0.5rem; font-weight:600; }
+@keyframes flashBg { from { background:#d1fae5; } to { background:inherit; } }
 .header {
   background: rgba(255,255,255,0.95);
   border-radius: 20px;

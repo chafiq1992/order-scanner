@@ -1,12 +1,12 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
-from .schemas import ScanIn, ScanOut
+from .schemas import ScanIn, ScanOut, ScanRecord, ScanUpdate
 from . import shopify, database, models, sheets
 from sqlalchemy import select, text
 import os
 import re
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -144,6 +144,38 @@ async def tag_summary_by_store():
                 if tok in store_counts:
                     store_counts[tok] += 1
     return summary
+
+
+@app.get("/scans", response_model=list[ScanRecord])
+async def list_scans(date: str, tag: str | None = None):
+    """Return scans for a given *date* (YYYY-MM-DD) optionally filtered by tag."""
+    day = datetime.fromisoformat(date)
+    next_day = day.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    async with database.AsyncSessionLocal() as db:
+        stmt = select(models.Scan).where(models.Scan.ts >= day, models.Scan.ts < next_day)
+        if tag:
+            stmt = stmt.where(models.Scan.tags.ilike(f"%{tag}%"))
+        stmt = stmt.order_by(models.Scan.ts.desc())
+        q = await db.execute(stmt)
+        rows = q.scalars().all()
+        return [ScanRecord.model_validate(r.__dict__) for r in rows]
+
+
+@app.patch("/scans/{scan_id}", response_model=ScanRecord)
+async def update_scan(scan_id: int, data: ScanUpdate):
+    async with database.AsyncSessionLocal() as db:
+        scan = await db.get(models.Scan, scan_id)
+        if not scan:
+            raise HTTPException(404, "Scan not found")
+        if data.tags is not None:
+            scan.tags = data.tags
+        if data.driver is not None:
+            scan.driver = data.driver
+        if data.status is not None:
+            scan.status = data.status
+        await db.commit()
+        await db.refresh(scan)
+        return ScanRecord.model_validate(scan.__dict__)
 
 
 @app.get("/health")
