@@ -25,6 +25,21 @@ GCP_SA_B64=eyJ0eXAiOiJKV1QiLCJhbGciOiJ...
 SHOPIFY_STORES_JSON=[{"name":"main","api_key":"abc","password":"secret","domain":"example.myshopify.com"}]
 ```
 
+## How It Works
+
+The backend exposes a small REST API implemented with FastAPI. Scans are
+submitted to the `/scan` endpoint as JSON with a `barcode` field. The code
+normalizes the value (keeping only digits) and checks if the corresponding order
+has already been scanned. If not, it looks up the order through the configured
+Shopify stores. Each successful scan is stored in the `scans` table with the
+order name, tags, fulfillment status and other metadata. When `GOOGLE_SHEET_ID`
+and `GCP_SA_B64` are defined the same data is also appended to a *Scans* sheet
+in Google Sheets for additional logging.
+
+The `/tag-summary` endpoint counts how many stored scans contain each delivery
+tag of interest. It returns a JSON object with keys like `fast` or `k` and the
+number of scans seen with those tags.
+
 ## Building the Frontend
 
 The web UI lives in the `frontend` directory and is built with Vite.  Install
