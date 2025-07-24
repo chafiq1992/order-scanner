@@ -11,9 +11,9 @@ from typing import Any, Dict, List
 # ---------------- configuration -------------
 CONFIG = {
     "MAX_DIGITS": 6,
-    "ORDER_CUTOFF_DAYS": 50,   # ignore orders older than N days
+    "ORDER_CUTOFF_DAYS": 50,  
     "RETRY_ATTEMPTS": 3,
-    "RETRY_DELAY": 1.0,        # seconds (linear back‑off)
+    "RETRY_DELAY": 1.0,       
 }
 
 # ---------------- env‑var helpers --------------
