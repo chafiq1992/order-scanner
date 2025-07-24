@@ -18,8 +18,6 @@ app = FastAPI(title="Order‑Scanner API", lifespan=lifespan)
 
 _barcode_re = re.compile(r"\d+")
 
-# Tags that identify the delivery company. Only these should be surfaced by the
-# application when reporting scan results.
 DELIVERY_TAGS = [
     "big",
     "k",
