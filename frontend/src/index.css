@@ -23,9 +23,9 @@ body {
   box-shadow:0 4px 12px rgba(0,0,0,0.2);
 }
 .toast { position:fixed; top:1rem; right:1rem; background:#10b981; color:#fff; padding:0.5rem 1rem; border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,0.2); }
-.table-card { background:#fff; padding:1rem; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,0.2); }
-.scans-table { width:100%; border-collapse:collapse; font-size:0.9rem; }
-.scans-table th, .scans-table td { padding:0.4rem; border-bottom:1px solid #ddd; }
+.table-card { background:#fff; padding:1rem; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,0.2); overflow-x:auto; }
+.scans-table { width:100%; border-collapse:collapse; font-size:0.9rem; table-layout:fixed; }
+.scans-table th, .scans-table td { padding:0.4rem; border-bottom:1px solid #ddd; word-break:break-word; }
 .scans-table tr:nth-child(even) { background:#f9f9f9; }
 .scans-table tr.flash { animation:flashBg 1s; }
 .scans-table tr.missing-tag { background:#fff8c5; }
@@ -94,7 +94,7 @@ h1 { color: #4c51bf; margin:0 0 1rem; font-size:1.8rem; font-weight:700; text-sh
 .order-name {
   font-family:'Courier New', monospace; font-weight:700; font-size:1.1rem; color:#1f2937;
   background:rgba(255,255,255,0.95); padding:0.2rem 0.5rem; border-radius:8px;
-  border:2px solid #4c51bf; letter-spacing:1px;
+  border:2px solid #4c51bf; letter-spacing:1px; overflow-wrap:anywhere;
 }
 .tag-count, .order-tag {
   display:inline-block; padding:0.1em 0.5em; margin:0.1em; border-radius:20px;
