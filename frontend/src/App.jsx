@@ -24,45 +24,57 @@ export default function App() {
   const [resultClass, setResultClass] = useState("");
   const [orders, setOrders] = useState([]);
   const [summary, setSummary] = useState({});
-  const [showReader, setShowReader] = useState(false);
+  const [filterTag, setFilterTag] = useState("");
   const [scanning, setScanning] = useState(false);
   const [showStart, setShowStart] = useState(true);
   const [showAgain, setShowAgain] = useState(false);
 
   useEffect(() => {
     fetchSummary();
+    const stored = localStorage.getItem("orders");
+    if (stored) {
+      try {
+        const list = JSON.parse(stored);
+        const today = new Date().toISOString().slice(0, 10);
+        setOrders(list.filter((o) => o.ts && o.ts.startsWith(today)));
+      } catch {}
+    }
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem("orders", JSON.stringify(orders));
+  }, [orders]);
 
   function startScanner() {
     setResult("📱 Point your camera at a QR code...");
     setResultClass("");
-    setShowReader(true);
     setScanning(true);
     setShowStart(false);
     setShowAgain(false);
 
-    const qr = new Html5Qrcode(readerRef.current.id);
-    scannerRef.current = qr;
-    qr.start(
-      { facingMode: "environment" },
-      { fps: 10, qrbox: 250 },
-      (code) => {
-        if (navigator.vibrate) navigator.vibrate(200);
-        qr.stop().then(() => {
-          setShowReader(false);
-          setScanning(false);
-          setShowAgain(true);
-          setResult("⏳ Processing scan...");
-          processScan(code);
-        });
-      },
-      () => {}
-    ).catch(() => {
-      handleScanError("Camera access denied or not available");
-      setShowReader(false);
+    let qr = scannerRef.current;
+    const config = { fps: 10, qrbox: 250 };
+    const onScan = (code) => {
+      if (navigator.vibrate) navigator.vibrate(200);
+      qr.pause(true);
       setScanning(false);
-      setShowStart(true);
-    });
+      setShowAgain(true);
+      setResult("⏳ Processing scan...");
+      processScan(code);
+    };
+
+    if (!qr) {
+      qr = new Html5Qrcode(readerRef.current.id);
+      scannerRef.current = qr;
+      qr.start({ facingMode: "environment" }, config, onScan, () => {})
+        .catch(() => {
+          handleScanError("Camera access denied or not available");
+          setScanning(false);
+          setShowStart(true);
+        });
+    } else {
+      qr.resume();
+    }
   }
 
   async function processScan(barcode) {
@@ -86,7 +98,7 @@ export default function App() {
   }
 
   function updateScanUI(data) {
-    const { result: res, order, tag } = data;
+    const { result: res, order, tag, ts } = data;
     setResult(`${statusIcon(res)} ${res}`);
     setResultClass(resultClassFrom(res));
     if (res.includes("✅")) {
@@ -94,12 +106,12 @@ export default function App() {
     } else {
       playErrorSound();
     }
-    addOrderToList({ result: res, order, tag });
+    addOrderToList({ result: res, order, tag, ts });
     fetchSummary();
   }
 
   function addOrderToList(item) {
-    setOrders((prev) => [item, ...prev.slice(0, 19)]);
+    setOrders((prev) => [item, ...prev].slice(0, 20));
   }
 
   async function fetchSummary() {
@@ -107,6 +119,10 @@ export default function App() {
     const data = await res.json();
     setSummary(data);
   }
+
+  const displayedOrders = filterTag
+    ? orders.filter((o) => (o.tag || "").toLowerCase() === filterTag)
+    : orders;
 
   return (
     <div className="container">
@@ -116,28 +132,17 @@ export default function App() {
           id="reader"
           ref={readerRef}
           className={scanning ? "scanning" : ""}
-          style={{ display: showReader ? "block" : "none" }}
         ></div>
         <div id="result" className={resultClass}>
           {result}
         </div>
-        {showStart && (
-          <button className="scan-btn" id="scanBtn" onClick={startScanner}>
-            <span className="emoji">📷</span>Start Scan
-          </button>
-        )}
-        {showAgain && (
-          <button className="scan-btn" id="againBtn" onClick={startScanner}>
-            <span className="emoji">🔄</span>Scan Another
-          </button>
-        )}
       </div>
       <div id="scan-log">
         <div className="section-header">
           <span>📋</span>Recent Scans
         </div>
         <ul id="orderList">
-          {orders.map((o, i) => (
+          {displayedOrders.map((o, i) => (
             <li key={i} className={`order-item ${statusClass(o.result)}`}>
               <div className="order-status">
                 <span
@@ -157,6 +162,8 @@ export default function App() {
             </li>
           ))}
         </ul>
+      </div>
+      <div className="bottom-bar">
         <div className="section-header">
           <span>📊</span>Tag Summary
         </div>
@@ -166,8 +173,11 @@ export default function App() {
             .map(([tag, count]) => (
               <span
                 key={tag}
-                className="tag-count"
+                className={`tag-count ${filterTag === tag.toLowerCase() ? "active" : ""}`}
                 style={{ background: tagColors[tag] || tagColors["none"] }}
+                onClick={() =>
+                  setFilterTag((cur) => (cur === tag.toLowerCase() ? "" : tag.toLowerCase()))
+                }
               >
                 {count} × {tag}
               </span>
@@ -178,6 +188,16 @@ export default function App() {
             </span>
           )}
         </div>
+        {showStart && (
+          <button className="scan-btn" id="scanBtn" onClick={startScanner}>
+            <span className="emoji">📷</span>Scan
+          </button>
+        )}
+        {showAgain && (
+          <button className="scan-btn" id="againBtn" onClick={startScanner}>
+            <span className="emoji">🔄</span>Scan Again
+          </button>
+        )}
       </div>
       <audio id="successSound" preload="auto">
         <source
