@@ -12,7 +12,7 @@ os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 os.environ.setdefault("STATIC_FILES_PATH", "static")
 Path("static").mkdir(exist_ok=True)
 
-from backend.app.main import app, _clean  # noqa: E402
+from backend.app.main import app, _clean, _detect_delivery_tag  # noqa: E402
 from backend.app import database, models  # noqa: E402
 
 
@@ -165,3 +165,43 @@ def test_scan_filters_tags(client, monkeypatch):
     assert resp.status_code == 200
     data = resp.json()
     assert data["tag"] == "fast"
+
+
+def test_detect_delivery_tag_exact_match():
+    assert _detect_delivery_tag("fast, urgent") == "fast"
+    assert _detect_delivery_tag("K, other") == "k"
+    # partial words should not match
+    assert _detect_delivery_tag("snack") == ""
+
+
+def test_tag_summary_counts(client, monkeypatch):
+    calls = []
+
+    async def custom_find_order(order_name: str):
+        calls.append(order_name)
+        if order_name == "#555":
+            return {
+                "tags": "fast, urgent",
+                "fulfillment": "fulfilled",
+                "status": "open",
+                "store": "main",
+                "result": "✅ OK",
+            }
+        return {
+            "tags": "K",
+            "fulfillment": "fulfilled",
+            "status": "open",
+            "store": "main",
+            "result": "✅ OK",
+        }
+
+    monkeypatch.setattr("backend.app.shopify.find_order", custom_find_order)
+
+    before = client.get("/tag-summary").json()
+
+    client.post("/scan", json={"barcode": "555"})
+    client.post("/scan", json={"barcode": "556"})
+
+    after = client.get("/tag-summary").json()
+    assert after.get("fast") >= before.get("fast") + 1
+    assert after.get("k") >= before.get("k") + 1

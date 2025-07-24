@@ -32,11 +32,17 @@ DELIVERY_TAGS = [
 
 
 def _detect_delivery_tag(tag_str: str) -> str:
-    """Return the first known delivery tag found in *tag_str* (case-insensitive)."""
-    low = (tag_str or "").lower()
+    """Return the first known delivery tag found in *tag_str* (case-insensitive).
+
+    The *tag_str* may contain a comma separated list of tags.  Each token is
+    matched individually against :data:`DELIVERY_TAGS` using case-insensitive
+    equality.
+    """
+    tokens = [(t or "").strip().lower() for t in (tag_str or "").split(",")]
     for tag in DELIVERY_TAGS:
-        if tag in low:
-            return tag
+        for tok in tokens:
+            if tok == tag:
+                return tag
     return ""
 
 
@@ -113,10 +119,10 @@ async def tag_summary():
         q = await db.execute(text("SELECT tags FROM scans"))
         counts = {tag: 0 for tag in DELIVERY_TAGS}
         for (t,) in q:
-            low = (t or "").lower()
-            for k in counts:
-                if k in low:
-                    counts[k] += 1
+            tokens = [(tok or "").strip().lower() for tok in (t or "").split(",")]
+            for tok in tokens:
+                if tok in counts:
+                    counts[tok] += 1
     return counts
 
 
