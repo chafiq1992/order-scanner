@@ -8,7 +8,6 @@ import re
 from contextlib import asynccontextmanager
 from datetime import datetime
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with database.engine.begin() as conn:
