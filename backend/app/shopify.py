@@ -8,7 +8,7 @@ import datetime as dt
 from typing import Any, Dict, List
 
 
-# ---------------- configuration ----------------
+# ---------------- configuration -------------
 CONFIG = {
     "MAX_DIGITS": 6,
     "ORDER_CUTOFF_DAYS": 50,   # ignore orders older than N days
