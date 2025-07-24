@@ -151,13 +151,12 @@ export default function App() {
                 {o.result}
               </div>
               <div className="order-details">
-                <span className="order-name">{o.order}</span>
                 <span
-                  className="order-tag"
-                  style={{ background: tagColors[o.tag] || tagColors["none"] }}
+                  className={`order-tag ${statusClass(o.result)}`}
                 >
                   {o.tag || "No tag"}
                 </span>
+                <span className="order-name">{o.order}</span>
               </div>
             </li>
           ))}
