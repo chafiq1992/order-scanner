@@ -15,7 +15,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Order‑Scanner API", lifespan=lifespan)
+app = FastAPI(title="Order‑Scanner API")
 
 _barcode_re = re.compile(r"\d+")
 
