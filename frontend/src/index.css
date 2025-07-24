@@ -72,14 +72,14 @@ h1 { color: #4c51bf; margin:0 0 1rem; font-size:1.8rem; font-weight:700; text-sh
 .scan-btn:active { transform:translateY(0); box-shadow:0 4px 15px rgba(76,81,191,0.4); }
 .scan-btn .emoji { font-size:1.2em; filter:drop-shadow(2px 2px 4px rgba(0,0,0,0.2)); }
 #scan-log {
-  margin-top:1rem; text-align:left; background:rgba(255,255,255,0.95);
+  margin-top:0.5rem; text-align:left; background:rgba(255,255,255,0.95);
   padding:1rem; border-radius:20px; box-shadow:0 10px 30px rgba(0,0,0,0.2); backdrop-filter:blur(10px);
 }
 .section-header {
-  font-size:1.2rem; font-weight:700; color:#4c51bf; margin-bottom:1rem; padding-bottom:0.5rem;
+  font-size:1.2rem; font-weight:700; color:#4c51bf; margin-bottom:0.5rem; padding-bottom:0.3rem;
   border-bottom:3px solid #e5e7eb; display:flex; align-items:center; gap:0.5rem;
 }
-#orderList { list-style:none; padding:0; margin:0 0 1rem 0; max-height:400px; overflow-y:auto; }
+#orderList { list-style:none; padding:0; margin:0 0 0.5rem 0; max-height:600px; overflow-y:auto; }
 .order-item {
   margin-bottom:0.5rem; padding:0.6rem; border-radius:8px; background:#f8fafc;
   border-left:4px solid #e5e7eb; box-shadow:0 1px 3px rgba(0,0,0,0.1);
@@ -108,13 +108,13 @@ h1 { color: #4c51bf; margin:0 0 1rem; font-size:1.8rem; font-weight:700; text-sh
   position:sticky;
   bottom:0;
   background:rgba(255,255,255,0.95);
-  padding:0.5rem;
+  padding:0.4rem;
   border-radius:20px 20px 0 0;
   box-shadow:0 -4px 12px rgba(0,0,0,0.2);
   display:flex;
   flex-direction:column;
   align-items:center;
-  gap:0.5rem;
+  gap:0.25rem;
 }
 .status-indicator { width:12px; height:12px; border-radius:50%; display:inline-block; margin-right:0.5rem; box-shadow:0 2px 4px rgba(0,0,0,0.2); }
 .status-success { background:#10b981; }
