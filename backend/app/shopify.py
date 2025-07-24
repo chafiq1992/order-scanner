@@ -89,7 +89,8 @@ async def _fetch_order(
     session: aiohttp.ClientSession, store: Dict[str, str], name: str
 ) -> Dict[str, Any] | None:
     url = (
-        f"https://{store['domain']}/admin/api/2023-07/orders.json?name={name}"
+        f"https://{store['domain']}/admin/api/2023-07/orders.json?"
+        f"status=any&name={name}"
     )
     async with session.get(
         url,
