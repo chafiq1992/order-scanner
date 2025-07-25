@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from .schemas import ScanIn, ScanOut, ScanRecord, ScanUpdate
 from . import shopify, database, models, sheets
@@ -79,7 +79,7 @@ def _clean(barcode: str) -> str:
 
 
 @app.post("/scan", response_model=ScanOut)
-async def scan(data: ScanIn):
+async def scan(data: ScanIn, background_tasks: BackgroundTasks):
     try:
         order_name = _clean(data.barcode)
     except ValueError:
@@ -123,15 +123,18 @@ async def scan(data: ScanIn):
         db.add(scan)
         await db.commit()
 
-    await sheets.append_row([
-        scan.ts.isoformat(" ", "seconds"),
-        order_name,
-        scan.tags,
-        scan.fulfillment,
-        scan.status,
-        scan.store,
-        scan.result
-    ])
+    background_tasks.add_task(
+        sheets.append_row,
+        [
+            scan.ts.isoformat(" ", "seconds"),
+            order_name,
+            scan.tags,
+            scan.fulfillment,
+            scan.status,
+            scan.store,
+            scan.result,
+        ],
+    )
     return ScanOut(
         result=scan.result,
         order=order_name,
