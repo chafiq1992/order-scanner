@@ -41,6 +41,11 @@ DELIVERY_TAGS = [
     "sand",
 ]
 
+# Number of days to consider a previous scan as recent when checking for
+# duplicates. This can be overridden with the ``RECENT_SCAN_DAYS``
+# environment variable.
+RECENT_SCAN_DAYS = int(os.getenv("RECENT_SCAN_DAYS", 7))
+
 
 def _detect_delivery_tag(tag_str: str) -> str:
     """Return the first known delivery tag found in *tag_str*.
@@ -81,7 +86,11 @@ async def scan(data: ScanIn):
         raise HTTPException(400, "❌ Invalid barcode")
 
     async with database.AsyncSessionLocal() as db:
-        stmt = select(models.Scan).filter_by(order_name=order_name).limit(1)
+        cutoff = datetime.utcnow() - timedelta(days=RECENT_SCAN_DAYS)
+        stmt = select(models.Scan).where(
+            models.Scan.order_name == order_name,
+            models.Scan.ts >= cutoff,
+        ).limit(1)
         q = await db.execute(stmt)
         if (row := q.scalar()):
             return ScanOut(

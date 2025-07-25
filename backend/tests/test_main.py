@@ -12,7 +12,7 @@ os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 os.environ.setdefault("STATIC_FILES_PATH", "static")
 Path("static").mkdir(exist_ok=True)
 
-from backend.app.main import app, _clean, _detect_delivery_tag  # noqa: E402
+from backend.app.main import app, _clean, _detect_delivery_tag, RECENT_SCAN_DAYS  # noqa: E402
 from backend.app import database, models  # noqa: E402
 
 
@@ -53,7 +53,7 @@ def patch_external(monkeypatch):
 
 
 @pytest.fixture()
-def seed_scan():
+def seed_recent_scan():
     async def _seed():
         async with database.AsyncSessionLocal() as db:
             scan = models.Scan(
@@ -63,6 +63,27 @@ def seed_scan():
                 status="open",
                 store="main",
                 result="✅ OK",
+            )
+            db.add(scan)
+            await db.commit()
+            await db.refresh(scan)
+            return scan.ts.isoformat().replace("+00:00", "Z")
+
+    return asyncio.run(_seed())
+
+
+@pytest.fixture()
+def seed_old_scan():
+    async def _seed():
+        async with database.AsyncSessionLocal() as db:
+            scan = models.Scan(
+                order_name="#998",
+                tags="fast",
+                fulfillment="fulfilled",
+                status="open",
+                store="main",
+                result="✅ OK",
+                ts=datetime.datetime.utcnow() - datetime.timedelta(days=RECENT_SCAN_DAYS + 1),
             )
             db.add(scan)
             await db.commit()
@@ -104,13 +125,22 @@ def test_scan_and_summary(client):
     assert summary.get("fast") == 1
 
 
-def test_scan_repeat(client, seed_scan):
+def test_scan_repeat_recent(client, seed_recent_scan):
     resp = client.post("/scan", json={"barcode": "999"})
     assert resp.status_code == 200
     data = resp.json()
     assert data["result"] == "⚠️ Already Scanned"
     assert data["order"] == "#999"
     assert data["tag"] == "fast"
+
+
+def test_scan_old_not_duplicate(client, seed_old_scan):
+    resp = client.post("/scan", json={"barcode": "998"})
+    assert resp.status_code == 200
+    data = resp.json()
+    # Should treat as a new scan because the existing one is older than cutoff
+    assert data["result"] == "✅ OK"
+    assert data["order"] == "#998"
 
 
 def test_scan_invalid_barcode(client):

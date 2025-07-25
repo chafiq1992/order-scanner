@@ -15,6 +15,7 @@ similar mechanism.  Cloud Run reads these values from the service configuration.
 | `GOOGLE_SHEET_ID` | *(optional)* ID of the Google Sheet used for logging scans. |
 | `GCP_SA_B64` | *(optional)* Base64‑encoded service account JSON with access to the sheet. |
 | `STATIC_FILES_PATH` | *(optional)* Location of the built frontend files. Defaults to `static`. |
+| `RECENT_SCAN_DAYS` | *(optional)* Number of days after which a previous scan is still considered recent when checking for duplicates. Defaults to `7`. |
 
 Example `.env` snippet:
 
