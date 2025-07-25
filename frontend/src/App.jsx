@@ -103,19 +103,55 @@ export default function App() {
       setShowAgain(true);
     };
 
+    const handleStartError = () => {
+      if (qr) {
+        qr.stop().catch(() => {});
+        qr.clear();
+      }
+      handleScanError("Camera access denied or not available");
+      setScanning(false);
+      setShowStart(true);
+    };
+
+    const verifyVideo = () => {
+      setTimeout(() => {
+        const root = readerRef.current;
+        if (!root) return;
+        const vid = root.querySelector("video");
+        if (!vid || !vid.videoWidth || !vid.videoHeight) {
+          handleStartError();
+        }
+      }, 500);
+    };
+
+    const startNew = () => {
+      qr
+        .start({ facingMode: "environment" }, config, onScan, () => {})
+        .then(() => {
+          hideLibraryInfo();
+          verifyVideo();
+        })
+        .catch(handleStartError);
+    };
+
     if (!qr) {
       qr = new Html5Qrcode(readerRef.current.id);
       scannerRef.current = qr;
-      qr
-        .start({ facingMode: "environment" }, config, onScan, () => {})
-        .then(hideLibraryInfo)
-        .catch(() => {
-          handleScanError("Camera access denied or not available");
-          setScanning(false);
-          setShowStart(true);
-        });
+      startNew();
     } else {
-      qr.resume().then(hideLibraryInfo);
+      qr
+        .resume()
+        .then(() => {
+          hideLibraryInfo();
+          verifyVideo();
+        })
+        .catch(() => {
+          qr.stop().catch(() => {});
+          qr.clear();
+          qr = new Html5Qrcode(readerRef.current.id);
+          scannerRef.current = qr;
+          startNew();
+        });
     }
   }
 
