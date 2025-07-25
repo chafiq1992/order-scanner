@@ -31,15 +31,35 @@ app = FastAPI(title="Order‑Scanner API", lifespan=lifespan)
 
 _barcode_re = re.compile(r"\d+")
 
-DELIVERY_TAGS = [
-    "big",
-    "k",
-    "12livery",
-    "12livrey",
-    "fast",
-    "oscario",
-    "sand",
-]
+# Split a tag string into tokens.  If commas are present they are treated as the
+# delimiter and spaces inside tokens are preserved.  Otherwise whitespace acts as
+# the separator.
+def _tokenize_tags(tag_str: str) -> list[str]:
+    if not tag_str:
+        return []
+    if "," in tag_str:
+        tokens = [t.strip() for t in tag_str.split(",") if t.strip()]
+    else:
+        tokens = re.split(r"\s+", tag_str)
+        tokens = [t.strip() for t in tokens if t.strip()]
+    return tokens
+
+# Mapping of tag variants to their canonical form.  Tags not listed here are
+# ignored.  Keys and values should be lowercase.
+_TAG_VARIANTS = {
+    "big": "big",
+    "k": "k",
+    "12livery": "12livery",
+    "12livrey": "12livery",
+    "fast": "fast",
+    "oscario": "oscario",
+    "sand": "sand",
+    "sandy": "sand",
+}
+
+# List of canonical delivery tags.  This is derived from the variant mapping
+# above and used by various endpoints when returning summary information.
+DELIVERY_TAGS = list(dict.fromkeys(_TAG_VARIANTS.values()))
 
 # Number of days to consider a previous scan as recent when checking for
 # duplicates. This can be overridden with the ``RECENT_SCAN_DAYS``
@@ -50,23 +70,44 @@ RECENT_SCAN_DAYS = int(os.getenv("RECENT_SCAN_DAYS", 7))
 def _detect_delivery_tag(tag_str: str) -> str:
     """Return the first known delivery tag found in *tag_str*.
 
-    Shopify stores tags as a comma separated list, however some installations
-    have been observed to use spaces instead.  To make the detection more
-    resilient we split the string on commas **and** whitespace.  Each resulting
-    token is then matched (case-insensitively) against
+    Shopify typically stores tags as a comma separated list, however some
+    installations have been observed to use spaces instead. Tokens are extracted
+    with :func:`_tokenize_tags` and matched case-insensitively against
     :data:`DELIVERY_TAGS`.
     """
 
-    import re
+    tokens = [t.lower() for t in _tokenize_tags(tag_str or "")]
 
-    tokens = re.split(r"[,\s]+", tag_str or "")
-    tokens = [t.strip().lower() for t in tokens if t.strip()]
-
-    for tag in DELIVERY_TAGS:
-        for tok in tokens:
-            if tok == tag:
-                return tag
+    for i, tok in enumerate(tokens):
+        canonical = _TAG_VARIANTS.get(tok) or _TAG_VARIANTS.get(tok.replace(" ", ""))
+        if canonical:
+            return canonical
+        if i + 1 < len(tokens):
+            combined = tok + tokens[i + 1]
+            canonical = _TAG_VARIANTS.get(combined) or _TAG_VARIANTS.get(combined.replace(" ", ""))
+            if canonical:
+                return canonical
     return ""
+
+
+def _extract_canonical_tags(tag_str: str) -> list[str]:
+    """Return a list of all known delivery tags found in *tag_str*."""
+
+    tokens = [t.lower() for t in _tokenize_tags(tag_str or "")]
+    found: list[str] = []
+    i = 0
+    while i < len(tokens):
+        tok = tokens[i]
+        canonical = _TAG_VARIANTS.get(tok) or _TAG_VARIANTS.get(tok.replace(" ", ""))
+        if not canonical and i + 1 < len(tokens):
+            combined = tok + tokens[i + 1]
+            canonical = _TAG_VARIANTS.get(combined) or _TAG_VARIANTS.get(combined.replace(" ", ""))
+            if canonical:
+                i += 1  # skip next token
+        if canonical:
+            found.append(canonical)
+        i += 1
+    return found
 
 
 def _clean(barcode: str) -> str:
@@ -149,11 +190,10 @@ async def tag_summary():
         q = await db.execute(text("SELECT tags FROM scans"))
         counts = {tag: 0 for tag in DELIVERY_TAGS}
         for (t,) in q:
-            tokens = [(tok or "").strip().lower() for tok in (t or "").split(",")]
-            for tok in tokens:
-                if tok in counts:
-                    counts[tok] += 1
-    return counts
+            for canonical in _extract_canonical_tags(t or ""):
+                if canonical in counts:
+                    counts[canonical] += 1
+        return counts
 
 
 @app.get("/tag-summary/by-store")
@@ -164,11 +204,10 @@ async def tag_summary_by_store():
         summary: dict[str, dict[str, int]] = {}
         for store, tags in q:
             store_counts = summary.setdefault(store, {tag: 0 for tag in DELIVERY_TAGS})
-            tokens = [(tok or "").strip().lower() for tok in (tags or "").split(",")]
-            for tok in tokens:
-                if tok in store_counts:
-                    store_counts[tok] += 1
-    return summary
+            for canonical in _extract_canonical_tags(tags or ""):
+                if canonical in store_counts:
+                    store_counts[canonical] += 1
+        return summary
 
 
 @app.get("/scans", response_model=list[ScanRecord])

@@ -8,11 +8,23 @@ const tagColors = {
   k: "#ffc0cb",
   big: "#fff176",
   "12livery": "#a5d6a7",
-  "12livrey": "#a5d6a7",
   fast: "#90caf9",
   oscario: "#40e0d0",
   sand: "#ffcc80",
   none: "#f28b82",
+};
+
+// Map tag variants to their canonical form.  Keys and values should be lowercase.
+const tagSynonyms = {
+  k: "k",
+  big: "big",
+  "12livery": "12livery",
+  "12livrey": "12livery",
+  "12 livery": "12livery",
+  fast: "fast",
+  oscario: "oscario",
+  sand: "sand",
+  sandy: "sand",
 };
 
 export default function App() {
@@ -410,5 +422,10 @@ function playErrorSound() {
 
 function detectTag(tagStr) {
   const tokens = (tagStr || "").split(/[,\s]+/).map((t) => t.toLowerCase().trim());
-  return Object.keys(tagColors).find((t) => tokens.includes(t)) || "";
+  for (const tok of tokens) {
+    if (tagSynonyms[tok]) {
+      return tagSynonyms[tok];
+    }
+  }
+  return "";
 }
