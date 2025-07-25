@@ -87,7 +87,13 @@ export default function App() {
     setShowAgain(false);
 
     let qr = scannerRef.current;
-    const config = { fps: 10, qrbox: { width: 300, height: 200 } };
+    const config = {
+      fps: 10,
+      qrbox: (vw, vh) => {
+        const size = Math.floor(Math.min(vw, vh) * 0.8);
+        return { width: size, height: size };
+      },
+    };
     const onScan = (code) => {
       if (navigator.vibrate) navigator.vibrate(100);
       setResult("⏳ Processing scan...");
