@@ -206,6 +206,13 @@ def test_detect_delivery_tag_exact_match():
     assert _detect_delivery_tag("snack") == ""
 
 
+def test_detect_delivery_tag_variants():
+    assert _detect_delivery_tag("SANDY") == "sand"
+    assert _detect_delivery_tag("12livrey") == "12livery"
+    assert _detect_delivery_tag("12 livery") == "12livery"
+    assert _detect_delivery_tag("khaso") == ""
+
+
 def test_tag_summary_counts(client, monkeypatch):
     calls = []
 
@@ -237,6 +244,36 @@ def test_tag_summary_counts(client, monkeypatch):
     after = client.get("/tag-summary").json()
     assert after.get("fast") >= before.get("fast") + 1
     assert after.get("k") >= before.get("k") + 1
+
+
+def test_tag_summary_counts_variants(client, monkeypatch):
+    async def custom_find_order(order_name: str):
+        if order_name == "#701":
+            return {
+                "tags": "SANDY",
+                "fulfillment": "fulfilled",
+                "status": "open",
+                "store": "main",
+                "result": "✅ OK",
+            }
+        return {
+            "tags": "12 livery",
+            "fulfillment": "fulfilled",
+            "status": "open",
+            "store": "main",
+            "result": "✅ OK",
+        }
+
+    monkeypatch.setattr("backend.app.shopify.find_order", custom_find_order)
+
+    before = client.get("/tag-summary").json()
+
+    client.post("/scan", json={"barcode": "701"})
+    client.post("/scan", json={"barcode": "702"})
+
+    after = client.get("/tag-summary").json()
+    assert after.get("sand") >= before.get("sand") + 1
+    assert after.get("12livery") >= before.get("12livery") + 1
 
 
 def test_tag_summary_by_store(client, monkeypatch):
