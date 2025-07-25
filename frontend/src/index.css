@@ -8,7 +8,11 @@ body {
   min-height: 100vh;
   color: #333;
 }
-.container { max-width: 800px; margin: 0 auto; }
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding-bottom: 6rem; /* space for fixed bottom bar */
+}
 .tab-bar { display:flex; gap:0.5rem; margin-bottom:1rem; justify-content:center; }
 .tab-bar button {
   padding:0.6rem 1.2rem;
@@ -90,7 +94,13 @@ h1 { color: #4c51bf; margin:0 0 1rem; font-size:1.8rem; font-weight:700; text-sh
 .order-item.warning { border-left-color:#f59e0b; background:rgba(245,158,11,0.05); }
 .order-item.error { border-left-color:#ef4444; background:rgba(239,68,68,0.05); }
 .order-status-text { font-size:0.9rem; font-weight:600; }
-#tagSummary { display:flex; flex-wrap:wrap; gap:0.4rem; justify-content:center; max-height:3rem; overflow-y:auto; }
+#tagSummary {
+  display:flex;
+  flex-wrap:wrap;
+  gap:0.4rem;
+  justify-content:center;
+  padding:0.2rem 0;
+}
 .order-name {
   font-family:'Courier New', monospace; font-weight:700; font-size:1.1rem; color:#1f2937;
   background:rgba(255,255,255,0.95); padding:0.2rem 0.5rem; border-radius:8px;
@@ -105,8 +115,12 @@ h1 { color: #4c51bf; margin:0 0 1rem; font-size:1.8rem; font-weight:700; text-sh
 .tag-count:hover { transform:scale(1.05); box-shadow:0 4px 12px rgba(0,0,0,0.2); }
 .tag-count.active { outline:3px solid #4c51bf; }
 .bottom-bar {
-  position:sticky;
+  position:fixed;
+  left:0;
+  right:0;
   bottom:0;
+  max-width:800px;
+  margin:0 auto;
   background:rgba(255,255,255,0.95);
   padding:0.4rem;
   border-radius:20px 20px 0 0;
@@ -115,6 +129,7 @@ h1 { color: #4c51bf; margin:0 0 1rem; font-size:1.8rem; font-weight:700; text-sh
   flex-direction:column;
   align-items:center;
   gap:0.25rem;
+  z-index:20;
 }
 .status-indicator { width:12px; height:12px; border-radius:50%; display:inline-block; margin-right:0.5rem; box-shadow:0 2px 4px rgba(0,0,0,0.2); }
 .status-success { background:#10b981; }
