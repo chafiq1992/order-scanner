@@ -185,9 +185,22 @@ async def scan(data: ScanIn, background_tasks: BackgroundTasks):
 
 
 @app.get("/tag-summary")
-async def tag_summary():
+async def tag_summary(date: str | None = None):
+    """Return delivery tag counts for the given *date* (YYYY-MM-DD)."""
+
+    if not date:
+        date = datetime.utcnow().date().isoformat()
+
+    day = datetime.fromisoformat(date)
+    start = day.replace(hour=0, minute=0, second=0, microsecond=0)
+    end = start + timedelta(days=1)
+
     async with database.AsyncSessionLocal() as db:
-        q = await db.execute(text("SELECT tags FROM scans"))
+        stmt = select(models.Scan.tags).where(
+            models.Scan.ts >= start,
+            models.Scan.ts < end,
+        )
+        q = await db.execute(stmt)
         counts = {tag: 0 for tag in DELIVERY_TAGS}
         for (t,) in q:
             for canonical in _extract_canonical_tags(t or ""):

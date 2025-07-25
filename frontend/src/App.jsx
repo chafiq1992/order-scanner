@@ -152,7 +152,9 @@ export default function App() {
   }
 
   async function fetchSummary() {
-    const res = await fetch(`${apiBase}/tag-summary`);
+    const url = new URL(`${apiBase}/tag-summary`, window.location.origin);
+    url.searchParams.set("date", new Date().toISOString().slice(0, 10));
+    const res = await fetch(url.toString());
     const data = await res.json();
     setSummary(data);
   }
