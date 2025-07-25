@@ -50,11 +50,25 @@ body {
 }
 h1 { color: #4c51bf; margin:0 0 1rem; font-size:1.8rem; font-weight:700; text-shadow:2px 2px 4px rgba(0,0,0,0.1); }
 #reader {
-  width:100%; max-width:600px; height:200px; margin:0 auto 0.5rem; border-radius:15px;
-  box-shadow:0 8px 25px rgba(0,0,0,0.3); background:#fff; padding:15px;
-  display:block; border:3px solid #4c51bf;
+  width:100%;
+  max-width:600px;
+  height:auto;
+  aspect-ratio:4/3;
+  max-height:80vh;
+  margin:0 auto 0.5rem;
+  border-radius:15px;
+  box-shadow:0 8px 25px rgba(0,0,0,0.3);
+  background:#fff;
+  padding:15px;
+  display:block;
+  border:3px solid #4c51bf;
 }
-#reader video { width:100%!important; height:100%!important; border-radius:12px; object-fit:cover; }
+#reader video {
+  width:100%!important;
+  height:100%!important;
+  border-radius:12px;
+  object-fit:contain;
+}
 #reader #qr-shaded-region, #reader canvas { display:none!important; }
 #result {
   margin:0.5rem 0; font-size:1.2rem; font-weight:600; min-height:3em; padding:0.8rem;
