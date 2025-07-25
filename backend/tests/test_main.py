@@ -119,7 +119,8 @@ def test_scan_and_summary(client):
     assert data["order"] == "#123"
     assert data["tag"] == "fast"
 
-    resp = client.get("/tag-summary")
+    today = datetime.datetime.utcnow().date().isoformat()
+    resp = client.get(f"/tag-summary?date={today}")
     assert resp.status_code == 200
     summary = resp.json()
     assert summary.get("fast") == 1
@@ -236,12 +237,13 @@ def test_tag_summary_counts(client, monkeypatch):
 
     monkeypatch.setattr("backend.app.shopify.find_order", custom_find_order)
 
-    before = client.get("/tag-summary").json()
+    today = datetime.datetime.utcnow().date().isoformat()
+    before = client.get(f"/tag-summary?date={today}").json()
 
     client.post("/scan", json={"barcode": "555"})
     client.post("/scan", json={"barcode": "556"})
 
-    after = client.get("/tag-summary").json()
+    after = client.get(f"/tag-summary?date={today}").json()
     assert after.get("fast") >= before.get("fast") + 1
     assert after.get("k") >= before.get("k") + 1
 
@@ -266,14 +268,45 @@ def test_tag_summary_counts_variants(client, monkeypatch):
 
     monkeypatch.setattr("backend.app.shopify.find_order", custom_find_order)
 
-    before = client.get("/tag-summary").json()
+    today = datetime.datetime.utcnow().date().isoformat()
+    before = client.get(f"/tag-summary?date={today}").json()
 
     client.post("/scan", json={"barcode": "701"})
     client.post("/scan", json={"barcode": "702"})
 
-    after = client.get("/tag-summary").json()
+    after = client.get(f"/tag-summary?date={today}").json()
     assert after.get("sand") >= before.get("sand") + 1
     assert after.get("12livery") >= before.get("12livery") + 1
+
+
+def test_tag_summary_date_filter(client):
+    today = datetime.datetime.utcnow().date().isoformat()
+    yesterday = (datetime.datetime.utcnow() - datetime.timedelta(days=1)).date().isoformat()
+
+    before_today = client.get(f"/tag-summary?date={today}").json()
+    before_yday = client.get(f"/tag-summary?date={yesterday}").json()
+
+    async def seed():
+        async with database.AsyncSessionLocal() as db:
+            scan = models.Scan(
+                order_name="#yday",
+                tags="fast",
+                fulfillment="fulfilled",
+                status="open",
+                store="main",
+                result="✅ OK",
+                ts=datetime.datetime.utcnow() - datetime.timedelta(days=1),
+            )
+            db.add(scan)
+            await db.commit()
+
+    asyncio.run(seed())
+
+    after_today = client.get(f"/tag-summary?date={today}").json()
+    after_yday = client.get(f"/tag-summary?date={yesterday}").json()
+
+    assert after_today.get("fast") == before_today.get("fast")
+    assert after_yday.get("fast") >= before_yday.get("fast") + 1
 
 
 def test_tag_summary_by_store(client, monkeypatch):
