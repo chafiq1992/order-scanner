@@ -109,3 +109,33 @@ def test_fetch_order_empty_list_returns_none():
 
     result = asyncio.run(shopify._fetch_order(FakeSession(), store, "#123"))
     assert result is None
+
+
+def test_find_order_returns_most_recent(monkeypatch):
+    now = datetime.datetime.utcnow()
+
+    async def fake_fetch_order(session, store, name):
+        if store["name"] == "old":
+            return {
+                "tags": "",
+                "fulfillment_status": "fulfilled",
+                "created_at": (now - datetime.timedelta(days=2)).isoformat() + "Z",
+                "cancelled_at": None,
+            }
+        return {
+            "tags": "",
+            "fulfillment_status": "fulfilled",
+            "created_at": (now - datetime.timedelta(days=1)).isoformat() + "Z",
+            "cancelled_at": None,
+        }
+
+    stores = [
+        {"name": "old", "api_key": "1", "password": "1", "domain": "d1"},
+        {"name": "new", "api_key": "2", "password": "2", "domain": "d2"},
+    ]
+
+    monkeypatch.setattr(shopify, "_fetch_order", fake_fetch_order)
+    monkeypatch.setattr(shopify, "_stores", lambda: stores)
+
+    result = asyncio.run(shopify.find_order("#123"))
+    assert result["store"] == "new"

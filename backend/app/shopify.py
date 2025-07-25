@@ -125,46 +125,54 @@ async def find_order(order_name: str) -> Dict[str, str]:
     async with aiohttp.ClientSession(
         timeout=aiohttp.ClientTimeout(15)
     ) as session:
-        for store in _stores():
+        async def lookup(store: Dict[str, str]):
             for attempt in range(1, CONFIG["RETRY_ATTEMPTS"] + 1):
                 try:
                     order = await _fetch_order(session, store, order_name)
-                    if not order:
-                        break  # not in this store
-                    created = dt.datetime.fromisoformat(
-                        order["created_at"].replace("Z", "+00:00")
-                    )
-                    if created < cutoff:
-                        break  # too old
-                    best = {
-                        # Shopify may return null for certain fields. Fallback
-                        # to sensible defaults in that case so downstream code
-                        # can safely rely on string values.
-                        "tags": order.get("tags") or "",
-                        "fulfillment": order.get("fulfillment_status")
-                        or "unfulfilled",
-                        "status": (
-                            "closed" if order.get("cancelled_at") else "open"
-                        ),
-                        "store": store["name"],
-                        "result": (
-                            "⚠️ Cancelled"
-                            if order.get("cancelled_at")
-                            else (
-                                "❌ Unfulfilled"
-                                if order.get("fulfillment_status")
-                                != "fulfilled"
-                                else "✅ OK"
-                            )
-                        ),
-                    }
-                    return best  # stop at the first (newest) valid order
+                    return store, order
                 except Exception as e:
-                    # only raise on the final attempt
                     if attempt == CONFIG["RETRY_ATTEMPTS"]:
                         raise RuntimeError(
                             f"{store['name']} lookup failed: {e}"
                         ) from e
                     await asyncio.sleep(CONFIG["RETRY_DELAY"] * attempt)
+
+        tasks = [lookup(s) for s in _stores()]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    errors = [r for r in results if isinstance(r, Exception)]
+    if errors:
+        raise errors[0]
+
+    orders = []
+    for store, order in results:  # type: ignore[misc]
+        if not order:
+            continue
+        created = dt.datetime.fromisoformat(
+            order["created_at"].replace("Z", "+00:00")
+        )
+        orders.append((created, store, order))
+
+    orders.sort(key=lambda x: x[0], reverse=True)
+
+    for created, store, order in orders:
+        if created < cutoff:
+            continue
+        best = {
+            "tags": order.get("tags") or "",
+            "fulfillment": order.get("fulfillment_status") or "unfulfilled",
+            "status": "closed" if order.get("cancelled_at") else "open",
+            "store": store["name"],
+            "result": (
+                "⚠️ Cancelled"
+                if order.get("cancelled_at")
+                else (
+                    "❌ Unfulfilled"
+                    if order.get("fulfillment_status") != "fulfilled"
+                    else "✅ OK"
+                )
+            ),
+        }
+        return best
 
     return best
