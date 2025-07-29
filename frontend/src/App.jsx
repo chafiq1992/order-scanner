@@ -35,7 +35,7 @@ export default function App() {
   const [resultClass, setResultClass] = useState("");
   const [orders, setOrders] = useState([]);
   const [summary, setSummary] = useState({});
-  const [filterTag, setFilterTag] = useState("");
+  const [updatedTags, setUpdatedTags] = useState({});
   const [scanning, setScanning] = useState(false);
   const [showStart, setShowStart] = useState(true);
   const [showAgain, setShowAgain] = useState(false);
@@ -47,6 +47,7 @@ export default function App() {
 
   useEffect(() => {
     fetchSummary();
+    const id = setInterval(fetchSummary, 5000);
     const stored = localStorage.getItem("orders");
     if (stored) {
       try {
@@ -55,6 +56,7 @@ export default function App() {
         setOrders(list.filter((o) => o.ts && o.ts.startsWith(today)));
       } catch {}
     }
+    return () => clearInterval(id);
   }, []);
 
   useEffect(() => {
@@ -80,7 +82,7 @@ export default function App() {
   }
 
   function startScanner() {
-    setResult("📱 Point your camera at a QR code...");
+    setResult("");
     setResultClass("");
     setScanning(true);
     setShowStart(false);
@@ -198,7 +200,25 @@ export default function App() {
     url.searchParams.set("date", new Date().toISOString().slice(0, 10));
     const res = await fetch(url.toString());
     const data = await res.json();
-    setSummary(data);
+    setSummary((prev) => {
+      const changed = {};
+      for (const [tag, count] of Object.entries(data)) {
+        if (count > (prev[tag] || 0)) {
+          changed[tag] = true;
+        }
+      }
+      if (Object.keys(prev).length && Object.keys(changed).length) {
+        setUpdatedTags((u) => ({ ...u, ...changed }));
+        setTimeout(() => {
+          setUpdatedTags((u) => {
+            const copy = { ...u };
+            for (const t of Object.keys(changed)) delete copy[t];
+            return copy;
+          });
+        }, 600);
+      }
+      return data;
+    });
   }
 
   async function fetchScans() {
@@ -221,12 +241,20 @@ export default function App() {
       setFlashRow(id);
       setTimeout(() => setFlashRow(null), 1000);
       fetchScans();
+      fetchSummary();
     }
   }
 
-  const displayedOrders = filterTag
-    ? orders.filter((o) => (o.tag || "").toLowerCase() === filterTag)
-    : orders;
+  async function deleteScan(id) {
+    if (!confirm("Delete this scan?")) return;
+    const res = await fetch(`${apiBase}/scans/${id}`, { method: "DELETE" });
+    if (res.ok) {
+      fetchScans();
+      fetchSummary();
+    }
+  }
+
+  const displayedOrders = orders;
 
   const listTagCounts = {};
   scanRows.forEach((r) => {
@@ -294,20 +322,14 @@ export default function App() {
               {Object.entries(summary)
                 .sort((a, b) => b[1] - a[1])
                 .map(([tag, count]) => (
-                  <span
+                  <div
                     key={tag}
-                    className={`tag-count ${
-                      filterTag === tag.toLowerCase() ? "active" : ""
-                    }`}
+                    className={`summary-box ${updatedTags[tag] ? "bump" : ""}`}
                     style={{ background: tagColors[tag] || tagColors["none"] }}
-                    onClick={() =>
-                      setFilterTag((cur) =>
-                        cur === tag.toLowerCase() ? "" : tag.toLowerCase()
-                      )
-                    }
                   >
-                    {count} × {tag}
-                  </span>
+                    <div className="summary-name">{tag.toUpperCase()}</div>
+                    <div className="summary-count">{count}</div>
+                  </div>
                 ))}
               {Object.keys(summary).length === 0 && (
                 <span style={{ color: "#6b7280", fontStyle: "italic" }}>
@@ -341,7 +363,7 @@ export default function App() {
                 className={`tag-pill ${scanTag === "" ? "active" : ""}`}
                 onClick={() => setScanTag("")}
               >
-                All
+                All ({scanRows.length})
               </span>
               {Object.entries(listTagCounts).map(([tag, count]) => (
                 <span
@@ -364,6 +386,7 @@ export default function App() {
                 <th>Status</th>
                 <th>Tag</th>
                 <th>Scan Time</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -399,6 +422,14 @@ export default function App() {
                     </select>
                   </td>
                   <td>{new Date(r.ts).toLocaleTimeString()}</td>
+                  <td>
+                    <button
+                      className="delete-btn"
+                      onClick={() => deleteScan(r.id)}
+                    >
+                      🗑️
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
