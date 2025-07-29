@@ -12,7 +12,12 @@ os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 os.environ.setdefault("STATIC_FILES_PATH", "static")
 Path("static").mkdir(exist_ok=True)
 
-from backend.app.main import app, _clean, _detect_delivery_tag, RECENT_SCAN_DAYS  # noqa: E402
+from backend.app.main import (
+    app,
+    _clean,
+    _detect_delivery_tag,
+    RECENT_SCAN_DAYS,
+)  # noqa: E402
 from backend.app import database, models  # noqa: E402
 
 
@@ -83,7 +88,8 @@ def seed_old_scan():
                 status="open",
                 store="main",
                 result="✅ OK",
-                ts=datetime.datetime.utcnow() - datetime.timedelta(days=RECENT_SCAN_DAYS + 1),
+                ts=datetime.datetime.utcnow()
+                - datetime.timedelta(days=RECENT_SCAN_DAYS + 1),
             )
             db.add(scan)
             await db.commit()
@@ -281,7 +287,9 @@ def test_tag_summary_counts_variants(client, monkeypatch):
 
 def test_tag_summary_date_filter(client):
     today = datetime.datetime.utcnow().date().isoformat()
-    yesterday = (datetime.datetime.utcnow() - datetime.timedelta(days=1)).date().isoformat()
+    yesterday = (
+        (datetime.datetime.utcnow() - datetime.timedelta(days=1)).date().isoformat()
+    )
 
     before_today = client.get(f"/tag-summary?date={today}").json()
     before_yday = client.get(f"/tag-summary?date={yesterday}").json()
@@ -335,8 +343,14 @@ def test_tag_summary_by_store(client, monkeypatch):
     client.post("/scan", json={"barcode": "602"})
 
     after = client.get("/tag-summary/by-store").json()
-    assert after.get("irrakids", {}).get("fast", 0) >= before.get("irrakids", {}).get("fast", 0) + 1
-    assert after.get("irranova", {}).get("k", 0) >= before.get("irranova", {}).get("k", 0) + 1
+    assert (
+        after.get("irrakids", {}).get("fast", 0)
+        >= before.get("irrakids", {}).get("fast", 0) + 1
+    )
+    assert (
+        after.get("irranova", {}).get("k", 0)
+        >= before.get("irranova", {}).get("k", 0) + 1
+    )
 
 
 def test_list_and_update_scans(client):
@@ -354,3 +368,17 @@ def test_list_and_update_scans(client):
     data = resp.json()
     assert data["driver"] == "alice"
     assert data["status"] == "dispatched"
+
+
+def test_delete_scan(client):
+    today = datetime.datetime.utcnow().date().isoformat()
+    client.post("/scan", json={"barcode": "701"})
+    resp = client.get(f"/scans?date={today}")
+    first_id = resp.json()[0]["id"]
+
+    resp = client.delete(f"/scans/{first_id}")
+    assert resp.status_code == 204
+
+    resp = client.get(f"/scans?date={today}")
+    ids = [s["id"] for s in resp.json()]
+    assert first_id not in ids

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Response
 from fastapi.staticfiles import StaticFiles
 from .schemas import ScanIn, ScanOut, ScanRecord, ScanUpdate
 from . import shopify, database, models, sheets
@@ -8,6 +8,7 @@ import re
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from sqlalchemy import inspect
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -20,16 +21,22 @@ async def lifespan(app: FastAPI):
         columns = await conn.run_sync(get_columns)
 
         if "driver" not in columns:
-            await conn.execute(text("ALTER TABLE scans ADD COLUMN driver VARCHAR DEFAULT ''"))
+            await conn.execute(
+                text("ALTER TABLE scans ADD COLUMN driver VARCHAR DEFAULT ''")
+            )
 
         if "cod" not in columns:
-            await conn.execute(text("ALTER TABLE scans ADD COLUMN cod BOOLEAN DEFAULT FALSE"))
+            await conn.execute(
+                text("ALTER TABLE scans ADD COLUMN cod BOOLEAN DEFAULT FALSE")
+            )
 
     yield
+
 
 app = FastAPI(title="Order‑Scanner API", lifespan=lifespan)
 
 _barcode_re = re.compile(r"\d+")
+
 
 # Split a tag string into tokens.  If commas are present they are treated as the
 # delimiter and spaces inside tokens are preserved.  Otherwise whitespace acts as
@@ -43,6 +50,7 @@ def _tokenize_tags(tag_str: str) -> list[str]:
         tokens = re.split(r"\s+", tag_str)
         tokens = [t.strip() for t in tokens if t.strip()]
     return tokens
+
 
 # Mapping of tag variants to their canonical form.  Tags not listed here are
 # ignored.  Keys and values should be lowercase.
@@ -84,7 +92,9 @@ def _detect_delivery_tag(tag_str: str) -> str:
             return canonical
         if i + 1 < len(tokens):
             combined = tok + tokens[i + 1]
-            canonical = _TAG_VARIANTS.get(combined) or _TAG_VARIANTS.get(combined.replace(" ", ""))
+            canonical = _TAG_VARIANTS.get(combined) or _TAG_VARIANTS.get(
+                combined.replace(" ", "")
+            )
             if canonical:
                 return canonical
     return ""
@@ -101,7 +111,9 @@ def _extract_canonical_tags(tag_str: str) -> list[str]:
         canonical = _TAG_VARIANTS.get(tok) or _TAG_VARIANTS.get(tok.replace(" ", ""))
         if not canonical and i + 1 < len(tokens):
             combined = tok + tokens[i + 1]
-            canonical = _TAG_VARIANTS.get(combined) or _TAG_VARIANTS.get(combined.replace(" ", ""))
+            canonical = _TAG_VARIANTS.get(combined) or _TAG_VARIANTS.get(
+                combined.replace(" ", "")
+            )
             if canonical:
                 i += 1  # skip next token
         if canonical:
@@ -128,12 +140,16 @@ async def scan(data: ScanIn, background_tasks: BackgroundTasks):
 
     async with database.AsyncSessionLocal() as db:
         cutoff = datetime.utcnow() - timedelta(days=RECENT_SCAN_DAYS)
-        stmt = select(models.Scan).where(
-            models.Scan.order_name == order_name,
-            models.Scan.ts >= cutoff,
-        ).limit(1)
+        stmt = (
+            select(models.Scan)
+            .where(
+                models.Scan.order_name == order_name,
+                models.Scan.ts >= cutoff,
+            )
+            .limit(1)
+        )
         q = await db.execute(stmt)
-        if (row := q.scalar()):
+        if row := q.scalar():
             return ScanOut(
                 result="⚠️ Already Scanned",
                 order=row.order_name,
@@ -148,7 +164,7 @@ async def scan(data: ScanIn, background_tasks: BackgroundTasks):
             result="❌ Unfulfilled order with no tag — not added",
             order=order_name,
             tag="",
-            ts=datetime.utcnow()
+            ts=datetime.utcnow(),
         )
 
     delivery_tag = _detect_delivery_tag(order.get("tags", ""))
@@ -227,9 +243,13 @@ async def tag_summary_by_store():
 async def list_scans(date: str, tag: str | None = None):
     """Return scans for a given *date* (YYYY-MM-DD) optionally filtered by tag."""
     day = datetime.fromisoformat(date)
-    next_day = day.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    next_day = day.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(
+        days=1
+    )
     async with database.AsyncSessionLocal() as db:
-        stmt = select(models.Scan).where(models.Scan.ts >= day, models.Scan.ts < next_day)
+        stmt = select(models.Scan).where(
+            models.Scan.ts >= day, models.Scan.ts < next_day
+        )
         if tag:
             stmt = stmt.where(models.Scan.tags.ilike(f"%{tag}%"))
         stmt = stmt.order_by(models.Scan.ts.desc())
@@ -255,6 +275,17 @@ async def update_scan(scan_id: int, data: ScanUpdate):
         return ScanRecord.model_validate(scan.__dict__)
 
 
+@app.delete("/scans/{scan_id}", status_code=204)
+async def delete_scan(scan_id: int):
+    async with database.AsyncSessionLocal() as db:
+        scan = await db.get(models.Scan, scan_id)
+        if not scan:
+            raise HTTPException(404, "Scan not found")
+        await db.delete(scan)
+        await db.commit()
+    return Response(status_code=204)
+
+
 @app.get("/health")
 def health():
     return {"ok": True}
@@ -263,4 +294,3 @@ def health():
 # Serve built frontend files if
 static_path = os.getenv("STATIC_FILES_PATH", "static")
 app.mount("/", StaticFiles(directory=static_path, html=True), name="static")
-

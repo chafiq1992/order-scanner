@@ -110,24 +110,30 @@ h1 { color: #4c51bf; margin:0 0 1rem; font-size:1.8rem; font-weight:700; text-sh
 .order-status-text { font-size:0.9rem; font-weight:600; }
 #tagSummary {
   display:flex;
-  flex-wrap:wrap;
+  flex-wrap:nowrap;
   gap:0.4rem;
   justify-content:center;
   padding:0.2rem 0;
+  overflow-x:auto;
 }
 .order-name {
   font-family:'Courier New', monospace; font-weight:700; font-size:1.1rem; color:#1f2937;
   background:rgba(255,255,255,0.95); padding:0.2rem 0.5rem; border-radius:8px;
   border:2px solid #4c51bf; letter-spacing:1px; overflow-wrap:anywhere;
 }
-.tag-count, .order-tag {
+.order-tag {
   display:inline-block; padding:0.1em 0.5em; margin:0.1em; border-radius:20px;
   font-weight:700; color:#333; font-size:0.9rem; text-transform:uppercase; letter-spacing:0.5px;
   box-shadow:0 1px 2px rgba(0,0,0,0.1); border:2px solid rgba(255,255,255,0.5);
 }
-.tag-count { transition:all 0.3s ease; cursor:pointer; }
-.tag-count:hover { transform:scale(1.05); box-shadow:0 4px 12px rgba(0,0,0,0.2); }
-.tag-count.active { outline:3px solid #4c51bf; }
+.summary-box {
+  display:flex; flex-direction:column; align-items:center; padding:0.3rem 0.6rem;
+  border-radius:12px; font-weight:600; color:#333; min-width:60px;
+  box-shadow:0 1px 2px rgba(0,0,0,0.1); border:2px solid rgba(255,255,255,0.5);
+}
+.summary-box.bump { animation:bump 0.5s ease-in-out; }
+.summary-name { font-size:0.75rem; }
+.summary-count { font-size:1.2rem; font-weight:700; }
 .bottom-bar {
   position:fixed;
   left:0;
@@ -152,6 +158,7 @@ h1 { color: #4c51bf; margin:0 0 1rem; font-size:1.8rem; font-weight:700; text-sh
 @keyframes slideInFromTop { from { opacity:0; transform:translateY(-20px); } to { opacity:1; transform:translateY(0); } }
 @keyframes pulse { 0%,100% { transform:scale(1); } 50% { transform:scale(1.05); } }
 .scanning { animation:pulse 2s infinite; }
+@keyframes bump { 0%,100% { transform:scale(1); } 50% { transform:scale(1.2); } }
 @media (max-width:768px) {
   body { padding:0.5rem; }
   h1 { font-size:2rem; }
@@ -159,3 +166,12 @@ h1 { color: #4c51bf; margin:0 0 1rem; font-size:1.8rem; font-weight:700; text-sh
   .scan-btn { padding:1rem 2rem; font-size:1.3rem; }
   .order-name { font-size:1rem; padding:0.3rem 0.5rem; }
 }
+
+.delete-btn {
+  background:none;
+  border:none;
+  cursor:pointer;
+  font-size:1.2rem;
+  color:#ef4444;
+}
+.delete-btn:hover { color:#991b1b; }
