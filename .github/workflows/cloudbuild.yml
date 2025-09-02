@@ -1,0 +1,25 @@
+name: Cloud Build Deploy
+on:
+  push:
+    branches: [ main ]
+jobs:
+  cloud-build-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+    - uses: actions/checkout@v4
+    - id: auth
+      uses: google-github-actions/auth@v2
+      with:
+        workload_identity_provider: ${{ secrets.GCP_IDP }}
+        service_account:          ${{ secrets.GCP_SA_EMAIL }}
+    - uses: google-github-actions/setup-gcloud@v2
+    - name: Configure project
+      run: |
+        gcloud config set project ${{ secrets.GCP_PROJECT_ID }}
+    - name: Submit to Cloud Build (cloudbuild.yaml)
+      run: |
+        gcloud builds submit --config cloudbuild.yaml --substitutions _SERVICE=order-scanner,_REGION=europe-west1
+
