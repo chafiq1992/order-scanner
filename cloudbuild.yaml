@@ -1,13 +1,13 @@
 # cloudbuild.yaml ─ Continuous build + deploy to Cloud Run
 substitutions:
-  _SERVICE: orderscan
+  _SERVICE: order-scanner
   _REGION: europe-west1
-  _IMAGE: gcr.io/$PROJECT_ID/orderscan:$SHORT_SHA
+  _IMAGE: europe-west1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/order-scanner/order-scannerv3:$SHORT_SHA
 
 steps:
-# 1 Build image
+# 1 Build image (backend Dockerfile)
 - name: 'gcr.io/cloud-builders/docker'
-  args: ['build', '-t', '${_IMAGE}', '.']
+  args: ['build', '-t', '${_IMAGE}', '-f', 'backend/Dockerfile', 'backend']
 
 # 2 Push image
 - name: 'gcr.io/cloud-builders/docker'
