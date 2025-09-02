@@ -44,6 +44,13 @@ export default function App() {
   const [scanTag, setScanTag] = useState("");
   const [toast, setToast] = useState("");
   const [flashRow, setFlashRow] = useState(null);
+  const [showManual, setShowManual] = useState(false);
+  const [manualOrder, setManualOrder] = useState("");
+  const [manualTag, setManualTag] = useState("");
+  const [manualStatus, setManualStatus] = useState("");
+  const [manualStore, setManualStore] = useState("");
+  const [fulfilledCounts, setFulfilledCounts] = useState({});
+  const [loadingCounts, setLoadingCounts] = useState(false);
 
   useEffect(() => {
     fetchSummary();
@@ -66,6 +73,9 @@ export default function App() {
   useEffect(() => {
     if (tab === "list") {
       fetchScans();
+    }
+    if (tab === "fulfilled") {
+      fetchFulfilledCounts();
     }
   }, [tab, scanDate, scanTag]);
 
@@ -269,6 +279,45 @@ export default function App() {
     }
   }
 
+  async function createManualScan() {
+    if (!manualOrder.trim()) return;
+    const payload = {
+      order_name: manualOrder.trim(),
+      tags: manualTag,
+      status: manualStatus,
+      store: manualStore,
+    };
+    const res = await fetch(`${apiBase}/scans`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      setShowManual(false);
+      setManualOrder("");
+      setManualTag("");
+      setManualStatus("");
+      setManualStore("");
+      setToast("Added manually \u2713");
+      setTimeout(() => setToast(""), 1500);
+      fetchScans();
+      fetchSummary();
+    }
+  }
+
+  async function fetchFulfilledCounts() {
+    try {
+      setLoadingCounts(true);
+      const url = new URL(`${apiBase}/fulfilled-counts`, window.location.origin);
+      url.searchParams.set("date", scanDate);
+      const res = await fetch(url.toString());
+      const data = await res.json();
+      setFulfilledCounts(data || {});
+    } finally {
+      setLoadingCounts(false);
+    }
+  }
+
   const displayedOrders = orders;
 
   const listTagCounts = {};
@@ -295,6 +344,12 @@ export default function App() {
           onClick={() => setTab("list")}
         >
           Scanned Orders
+        </button>
+        <button
+          className={tab === "fulfilled" ? "active" : ""}
+          onClick={() => setTab("fulfilled")}
+        >
+          Shopify Fulfilled
         </button>
       </div>
       {toast && <div className="toast">{toast}</div>}
@@ -373,6 +428,7 @@ export default function App() {
               value={scanDate}
               onChange={(e) => setScanDate(e.target.value)}
             />
+            <button className="btn" onClick={() => setShowManual(true)}>➕ Add Manually</button>
             <div className="tag-pills">
               <span
                 className={`tag-pill ${scanTag === "" ? "active" : ""}`}
@@ -453,6 +509,70 @@ export default function App() {
             Total scanned today: {scanRows.length} orders |
             Current view: {displayedList.length}
             {scanTag ? ` ${scanTag.toUpperCase()}` : ""}
+          </div>
+        </div>
+      )}
+      {tab === "fulfilled" && (
+        <div className="table-card">
+          <div className="filters">
+            <input
+              type="date"
+              value={scanDate}
+              onChange={(e) => setScanDate(e.target.value)}
+            />
+            <button className="btn" onClick={fetchFulfilledCounts} disabled={loadingCounts}>
+              {loadingCounts ? "Refreshing..." : "🔄 Refresh"}
+            </button>
+          </div>
+          <div className="fulfilled-grid">
+            <div className="summary-box" style={{ background:'#c7f9cc' }}>
+              <div className="summary-name">IRRANOVA</div>
+              <div className="summary-count">{fulfilledCounts["irranova"] || 0}</div>
+            </div>
+            <div className="summary-box" style={{ background:'#bde0fe' }}>
+              <div className="summary-name">IRRAKIDS</div>
+              <div className="summary-count">{fulfilledCounts["irrakids"] || 0}</div>
+            </div>
+          </div>
+        </div>
+      )}
+      {showManual && (
+        <div className="modal-overlay" onClick={() => setShowManual(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Add Scan Manually</h3>
+            <div className="form-row">
+              <label>Order #</label>
+              <input placeholder="#123456" value={manualOrder} onChange={(e)=>setManualOrder(e.target.value)} />
+            </div>
+            <div className="form-row">
+              <label>Tag</label>
+              <select value={manualTag} onChange={(e)=>setManualTag(e.target.value)}>
+                <option value="">None</option>
+                {Object.keys(tagColors).map((t)=>(
+                  <option key={t} value={t}>{t.toUpperCase()}</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-row">
+              <label>Status</label>
+              <select value={manualStatus} onChange={(e)=>setManualStatus(e.target.value)}>
+                <option value="">—</option>
+                <option>Fulfilled</option>
+                <option>Unfulfilled</option>
+              </select>
+            </div>
+            <div className="form-row">
+              <label>Store</label>
+              <select value={manualStore} onChange={(e)=>setManualStore(e.target.value)}>
+                <option value="">—</option>
+                <option value="irranova">Irranova</option>
+                <option value="irrakids">Irrakids</option>
+              </select>
+            </div>
+            <div className="modal-actions">
+              <button className="btn" onClick={() => setShowManual(false)}>Cancel</button>
+              <button className="btn btn-primary" onClick={createManualScan}>Add</button>
+            </div>
           </div>
         </div>
       )}

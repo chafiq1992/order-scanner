@@ -175,3 +175,22 @@ h1 { color: #4c51bf; margin:0 0 1rem; font-size:1.8rem; font-weight:700; text-sh
   color:#ef4444;
 }
 .delete-btn:hover { color:#991b1b; }
+
+/* Generic buttons */
+.btn { padding:0.45rem 0.9rem; border-radius:8px; border:1px solid #c7d2fe; background:#eef2ff; color:#3730a3; cursor:pointer; font-weight:600; }
+.btn:hover { background:#e0e7ff; }
+.btn:disabled { opacity:0.6; cursor:not-allowed; }
+.btn-primary { background:linear-gradient(135deg,#4c51bf 0%,#667eea 100%); color:#fff; border:none; }
+.btn-primary:hover { filter:brightness(1.05); }
+
+/* Modal */
+.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.4); display:flex; align-items:center; justify-content:center; z-index:50; }
+.modal { width:min(520px, 95vw); background:#fff; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,0.3); padding:1rem; text-align:left; }
+.modal h3 { margin:0 0 0.6rem; color:#111827; }
+.form-row { display:flex; gap:0.5rem; align-items:center; margin:0.5rem 0; }
+.form-row label { width:110px; font-weight:600; color:#374151; }
+.form-row input, .form-row select { flex:1; padding:0.45rem 0.6rem; border-radius:8px; border:1px solid #d1d5db; }
+.modal-actions { display:flex; gap:0.5rem; justify-content:flex-end; margin-top:0.8rem; }
+
+/* Fulfilled tab */
+.fulfilled-grid { display:flex; gap:0.6rem; justify-content:center; }

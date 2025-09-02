@@ -33,3 +33,11 @@ class ScanUpdate(BaseModel):
     tags: str | None = None
     driver: str | None = None
     status: str | None = None
+
+
+class ScanCreate(BaseModel):
+    order_name: str
+    tags: str | None = ""
+    fulfillment: str | None = None
+    status: str | None = None
+    store: str | None = ""

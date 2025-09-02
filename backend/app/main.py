@@ -1,8 +1,8 @@
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Response
 from fastapi.staticfiles import StaticFiles
-from .schemas import ScanIn, ScanOut, ScanRecord, ScanUpdate
+from .schemas import ScanIn, ScanOut, ScanRecord, ScanUpdate, ScanCreate
 from . import shopify, database, models, sheets
-from sqlalchemy import select, text
+from sqlalchemy import select, text, func
 import os
 import re
 from contextlib import asynccontextmanager
@@ -310,6 +310,78 @@ async def delete_scan(scan_id: int):
         await db.commit()
     return Response(status_code=204)
 
+
+@app.post("/scans", response_model=ScanRecord)
+async def create_scan(data: ScanCreate, background_tasks: BackgroundTasks):
+    """Create a scan record manually.
+
+    Accepts an order name (with or without the leading '#'), optional tags,
+    fulfillment, status and store. Result is marked as manually added.
+    """
+    # Normalize the order name using the same logic as barcode cleaning
+    try:
+        order_name = _clean(data.order_name)
+    except ValueError:
+        raise HTTPException(400, "❌ Invalid order number")
+
+    scan = models.Scan(
+        order_name=order_name,
+        phone="",
+        tags=data.tags or "",
+        fulfillment=(data.fulfillment or "").lower(),
+        status=data.status or "",
+        store=(data.store or "").lower(),
+        result="✅ Added manually",
+    )
+
+    async with database.AsyncSessionLocal() as db:
+        db.add(scan)
+        await db.commit()
+        await db.refresh(scan)
+
+    # Append to the sheet for consistency
+    background_tasks.add_task(
+        sheets.append_row,
+        [
+            scan.ts.isoformat(" ", "seconds"),
+            order_name,
+            scan.tags,
+            scan.fulfillment,
+            scan.status,
+            scan.store,
+            scan.result,
+        ],
+    )
+
+    return ScanRecord.model_validate(scan.__dict__)
+
+
+@app.get("/fulfilled-counts")
+async def fulfilled_counts(date: str | None = None):
+    """Return counts of fulfilled orders by store for a given date (UTC)."""
+    if not date:
+        date = datetime.utcnow().date().isoformat()
+    day = datetime.fromisoformat(date)
+    start = day.replace(hour=0, minute=0, second=0, microsecond=0)
+    end = start + timedelta(days=1)
+
+    async with database.AsyncSessionLocal() as db:
+        stmt = (
+            select(models.Scan.store, func.count())
+            .where(
+                models.Scan.ts >= start,
+                models.Scan.ts < end,
+                models.Scan.fulfillment.ilike("fulfilled")
+            )
+            .group_by(models.Scan.store)
+        )
+        q = await db.execute(stmt)
+        rows = q.all()
+        out: dict[str, int] = {}
+        for store, count in rows:
+            key = (store or "").lower() or "unknown"
+            out[key] = count
+        return out
 
 @app.get("/health")
 def health():
