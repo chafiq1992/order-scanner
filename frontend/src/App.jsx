@@ -51,6 +51,7 @@ export default function App() {
   const [manualStore, setManualStore] = useState("");
   const [fulfilledCounts, setFulfilledCounts] = useState({});
   const [loadingCounts, setLoadingCounts] = useState(false);
+  const [confirmDup, setConfirmDup] = useState({ show: false, barcode: "", reason: "", message: "" });
 
   useEffect(() => {
     fetchSummary();
@@ -171,14 +172,21 @@ export default function App() {
     }
   }
 
-  async function processScan(barcode) {
+  async function processScan(barcode, opts = { confirm_duplicate: false }) {
     try {
       const resp = await fetch(`${apiBase}/scan`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ barcode }),
+        body: JSON.stringify({ barcode, confirm_duplicate: !!opts.confirm_duplicate }),
       });
       const data = await resp.json();
+      if (data.needs_confirmation) {
+        setResult(`${statusIcon(data.result)} ${data.result}`);
+        setResultClass("result-warning");
+        setConfirmDup({ show: true, barcode, reason: data.reason || "", message: data.result });
+        setShowAgain(true);
+        return;
+      }
       updateScanUI(data);
     } catch (e) {
       handleScanError("Server error");
@@ -532,6 +540,33 @@ export default function App() {
             <div className="summary-box" style={{ background:'#bde0fe' }}>
               <div className="summary-name">IRRAKIDS</div>
               <div className="summary-count">{fulfilledCounts["irrakids"] || 0}</div>
+            </div>
+          </div>
+        </div>
+      )}
+      {confirmDup.show && (
+        <div className="modal-overlay" onClick={() => setConfirmDup({ show:false, barcode:"", reason:"", message:"" })}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Duplicate detected</h3>
+            <p style={{marginTop:0}}>{confirmDup.message}</p>
+            <div className="modal-actions">
+              <button className="btn btn-danger" onClick={() => {
+                // Remove pending placeholder if present
+                setOrders((prev) => {
+                  if (prev.length && (prev[0].result || '').startsWith('⏳') && prev[0].order === confirmDup.barcode) {
+                    return prev.slice(1);
+                  }
+                  return prev;
+                });
+                setConfirmDup({ show:false, barcode:"", reason:"", message:"" });
+                setResult("❌ Rejected");
+                setResultClass("result-error");
+              }}>Reject</button>
+              <button className="btn btn-primary" onClick={async () => {
+                const code = confirmDup.barcode;
+                setConfirmDup({ show:false, barcode:"", reason:"", message:"" });
+                await processScan(code, { confirm_duplicate: true });
+              }}>Accept</button>
             </div>
           </div>
         </div>

@@ -6,6 +6,7 @@ class ScanIn(BaseModel):
     barcode: str = Field(
         ..., json_schema_extra={"example": "#123456"}
     )
+    confirm_duplicate: bool | None = False
 
 
 class ScanOut(BaseModel):
@@ -13,6 +14,8 @@ class ScanOut(BaseModel):
     order: str
     tag: str
     ts: datetime
+    needs_confirmation: bool | None = False
+    reason: str | None = ""
 
 
 class ScanRecord(BaseModel):

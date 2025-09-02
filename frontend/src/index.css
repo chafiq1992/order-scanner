@@ -182,6 +182,8 @@ h1 { color: #4c51bf; margin:0 0 1rem; font-size:1.8rem; font-weight:700; text-sh
 .btn:disabled { opacity:0.6; cursor:not-allowed; }
 .btn-primary { background:linear-gradient(135deg,#4c51bf 0%,#667eea 100%); color:#fff; border:none; }
 .btn-primary:hover { filter:brightness(1.05); }
+.btn-danger { background:#fee2e2; color:#991b1b; border:1px solid #fecaca; }
+.btn-danger:hover { background:#fecaca; }
 
 /* Modal */
 .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.4); display:flex; align-items:center; justify-content:center; z-index:50; }

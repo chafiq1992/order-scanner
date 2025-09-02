@@ -155,12 +155,15 @@ async def scan(data: ScanIn, background_tasks: BackgroundTasks):
         )
         q = await db.execute(stmt)
         if row := q.scalar():
-            return ScanOut(
-                result="⚠️ Already Scanned",
-                order=row.order_name,
-                tag=_detect_delivery_tag(row.tags),
-                ts=row.ts,
-            )
+            if not (data.confirm_duplicate or False):
+                return ScanOut(
+                    result="⚠️ Already Scanned",
+                    order=row.order_name,
+                    tag=_detect_delivery_tag(row.tags),
+                    ts=row.ts,
+                    needs_confirmation=True,
+                    reason="order_duplicate",
+                )
 
     order = await shopify.find_order(order_name)
 
@@ -176,7 +179,6 @@ async def scan(data: ScanIn, background_tasks: BackgroundTasks):
     phone = order.get("phone", "")
 
     # Check for duplicate phone in the last 3 days
-    dup_phone_note = ""
     if phone:
         phone_cutoff = datetime.utcnow() - timedelta(days=3)
         async with database.AsyncSessionLocal() as db:
@@ -189,8 +191,15 @@ async def scan(data: ScanIn, background_tasks: BackgroundTasks):
                 .limit(1)
             )
             q = await db.execute(stmt)
-            if q.scalar():
-                dup_phone_note = " ⚠️ Duplicate phone in last 3 days"
+            if q.scalar() and not (data.confirm_duplicate or False):
+                return ScanOut(
+                    result="⚠️ Duplicate phone in last 3 days",
+                    order=order_name,
+                    tag=delivery_tag,
+                    ts=datetime.utcnow(),
+                    needs_confirmation=True,
+                    reason="phone_duplicate",
+                )
 
     scan = models.Scan(
         order_name=order_name,
@@ -218,7 +227,7 @@ async def scan(data: ScanIn, background_tasks: BackgroundTasks):
         ],
     )
     return ScanOut(
-        result=(scan.result + dup_phone_note).strip(),
+        result=scan.result,
         order=order_name,
         tag=delivery_tag,
         ts=scan.ts,
