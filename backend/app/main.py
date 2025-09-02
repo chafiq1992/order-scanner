@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks, Response
 from fastapi.staticfiles import StaticFiles
 from .schemas import ScanIn, ScanOut, ScanRecord, ScanUpdate, ScanCreate
 from . import shopify, database, models, sheets
-from sqlalchemy import select, text, func
+from sqlalchemy import select, text
 import os
 import re
 from contextlib import asynccontextmanager
@@ -358,30 +358,15 @@ async def create_scan(data: ScanCreate, background_tasks: BackgroundTasks):
 
 @app.get("/fulfilled-counts")
 async def fulfilled_counts(date: str | None = None):
-    """Return counts of fulfilled orders by store for a given date (UTC)."""
+    """Return counts of fulfilled orders by store for a given date (UTC) directly from Shopify."""
     if not date:
         date = datetime.utcnow().date().isoformat()
-    day = datetime.fromisoformat(date)
-    start = day.replace(hour=0, minute=0, second=0, microsecond=0)
-    end = start + timedelta(days=1)
-
-    async with database.AsyncSessionLocal() as db:
-        stmt = (
-            select(models.Scan.store, func.count())
-            .where(
-                models.Scan.ts >= start,
-                models.Scan.ts < end,
-                models.Scan.fulfillment.ilike("fulfilled")
-            )
-            .group_by(models.Scan.store)
-        )
-        q = await db.execute(stmt)
-        rows = q.all()
-        out: dict[str, int] = {}
-        for store, count in rows:
-            key = (store or "").lower() or "unknown"
-            out[key] = count
-        return out
+    try:
+        counts = await shopify.fulfilled_counts_by_store(date)
+        return counts
+    except Exception as e:
+        # Surface a friendly error
+        raise HTTPException(502, f"Failed to fetch from Shopify: {e}")
 
 @app.get("/health")
 def health():

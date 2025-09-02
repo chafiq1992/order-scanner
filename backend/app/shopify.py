@@ -202,3 +202,57 @@ async def find_order(order_name: str) -> Dict[str, str]:
         return best
 
     return best
+
+
+async def _orders_count(
+    session: aiohttp.ClientSession, store: Dict[str, str], params: Dict[str, str]
+) -> int:
+    """Return Shopify Orders count for a store with given filters."""
+    url = f"https://{store['domain']}/admin/api/2023-07/orders/count.json"
+    async with session.get(
+        url, headers=_auth_hdr(store["api_key"], store["password"]), params=params
+    ) as r:
+        if r.status != 200:
+            raise RuntimeError(f"{store['name']} responded {r.status}")
+        data = await r.json()
+    return int(data.get("count", 0))
+
+
+async def fulfilled_counts_by_store(date_iso: str) -> Dict[str, int]:
+    """Return a mapping of store_name -> fulfilled orders count for the given UTC date.
+
+    Uses Shopify Orders count endpoint filtered by fulfillment_status=shipped and
+    updated_at in the day window. This approximates orders fulfilled that day.
+    """
+    # Calculate day window in UTC
+    day = dt.datetime.fromisoformat(date_iso)
+    start = day.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=dt.timezone.utc)
+    end = start + dt.timedelta(days=1)
+
+    params = {
+        "status": "any",
+        # Shopify filter expects 'shipped' for fulfilled orders
+        "fulfillment_status": "shipped",
+        "updated_at_min": start.isoformat().replace("+00:00", "Z"),
+        "updated_at_max": end.isoformat().replace("+00:00", "Z"),
+    }
+
+    stores = _stores()
+    if not stores:
+        return {}
+
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(15)) as session:
+        tasks = [
+            _orders_count(session, store, params)  # type: ignore[arg-type]
+            for store in stores
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    counts: Dict[str, int] = {}
+    for store, result in zip(stores, results):
+        if isinstance(result, Exception):
+            # On error, default to 0 for that store
+            counts[store["name"].lower()] = 0
+        else:
+            counts[store["name"].lower()] = int(result)
+    return counts
