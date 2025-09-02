@@ -8,6 +8,7 @@ class Scan(Base):
     id = Column(Integer, primary_key=True, index=True)
     ts = Column(DateTime, default=datetime.utcnow, index=True)
     order_name = Column(String, index=True)
+    phone = Column(String, index=True, default="")
     tags = Column(String)
     fulfillment = Column(String)
     status = Column(String)

@@ -85,6 +85,30 @@ def _auth_hdr(api_key: str, password: str) -> Dict[str, str]:
     return {"Authorization": "Basic " + token}
 
 
+def _normalize_phone(phone: str | None) -> str:
+    if not phone:
+        return ""
+    digits = re.sub(r"\D+", "", phone)
+    # Keep last 10-12 digits to avoid country code discrepancies
+    return digits[-12:]
+
+
+def _extract_phone_from_order(order: Dict[str, Any]) -> str:
+    # Try common locations for phone numbers in Shopify order payloads
+    candidates: List[str | None] = [
+        order.get("phone"),
+        (order.get("shipping_address") or {}).get("phone"),
+        (order.get("billing_address") or {}).get("phone"),
+        (order.get("customer") or {}).get("phone"),
+        ((order.get("customer") or {}).get("default_address") or {}).get("phone"),
+    ]
+    for c in candidates:
+        normalized = _normalize_phone(c)
+        if normalized:
+            return normalized
+    return ""
+
+
 async def _fetch_order(
     session: aiohttp.ClientSession, store: Dict[str, str], name: str
 ) -> Dict[str, Any] | None:
@@ -120,6 +144,7 @@ async def find_order(order_name: str) -> Dict[str, str]:
         "status": "open",
         "store": "",
         "result": "❌ Not Found",
+        "phone": "",
     }
 
     async with aiohttp.ClientSession(
@@ -172,6 +197,7 @@ async def find_order(order_name: str) -> Dict[str, str]:
                     else "✅ OK"
                 )
             ),
+            "phone": _extract_phone_from_order(order),
         }
         return best
 

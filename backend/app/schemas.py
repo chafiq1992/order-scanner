@@ -19,6 +19,7 @@ class ScanRecord(BaseModel):
     id: int
     ts: datetime
     order_name: str
+    phone: str | None = ""
     tags: str | None
     fulfillment: str | None
     status: str | None

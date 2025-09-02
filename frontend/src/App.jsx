@@ -90,17 +90,21 @@ export default function App() {
 
     let qr = scannerRef.current;
     const config = {
-      fps: 10,
+      fps: 15,
       qrbox: (vw, vh) => {
         const size = Math.floor(Math.min(vw, vh) * 0.8);
         return { width: size, height: size };
       },
+      experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+      disableFlip: true,
     };
     const onScan = (code) => {
       if (navigator.vibrate) navigator.vibrate(100);
       setResult("⏳ Processing scan...");
       qr.pause(true);
       setScanning(false);
+      // Show instantly in the list
+      addOrderToList({ result: "⏳ Processing", order: code, tag: "", ts: new Date().toISOString() });
       processScan(code);
       setShowAgain(true);
     };
@@ -187,7 +191,18 @@ export default function App() {
     } else {
       playErrorSound();
     }
-    addOrderToList({ result: res, order, tag, ts });
+    // Replace the placeholder if present, otherwise prepend
+    setOrders((prev) => {
+      if (prev.length && (prev[0].result || "").startsWith("⏳")) {
+        const [_first, ...rest] = prev;
+        return [{ result: res, order, tag, ts }, ...rest].slice(0, 20);
+      }
+      return [{ result: res, order, tag, ts }, ...prev].slice(0, 20);
+    });
+    if (res.includes("Duplicate phone")) {
+      setToast("⚠️ Duplicate phone in last 3 days");
+      setTimeout(() => setToast(""), 2000);
+    }
     fetchSummary();
   }
 

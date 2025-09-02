@@ -30,6 +30,11 @@ async def lifespan(app: FastAPI):
                 text("ALTER TABLE scans ADD COLUMN cod BOOLEAN DEFAULT FALSE")
             )
 
+        if "phone" not in columns:
+            await conn.execute(
+                text("ALTER TABLE scans ADD COLUMN phone VARCHAR DEFAULT ''")
+            )
+
     yield
 
 
@@ -168,8 +173,28 @@ async def scan(data: ScanIn, background_tasks: BackgroundTasks):
         )
 
     delivery_tag = _detect_delivery_tag(order.get("tags", ""))
+    phone = order.get("phone", "")
+
+    # Check for duplicate phone in the last 3 days
+    dup_phone_note = ""
+    if phone:
+        phone_cutoff = datetime.utcnow() - timedelta(days=3)
+        async with database.AsyncSessionLocal() as db:
+            stmt = (
+                select(models.Scan)
+                .where(
+                    models.Scan.phone == phone,
+                    models.Scan.ts >= phone_cutoff,
+                )
+                .limit(1)
+            )
+            q = await db.execute(stmt)
+            if q.scalar():
+                dup_phone_note = " ⚠️ Duplicate phone in last 3 days"
+
     scan = models.Scan(
         order_name=order_name,
+        phone=phone,
         tags=order.get("tags", ""),
         fulfillment=order["fulfillment"],
         status=order["status"],
@@ -193,7 +218,7 @@ async def scan(data: ScanIn, background_tasks: BackgroundTasks):
         ],
     )
     return ScanOut(
-        result=scan.result,
+        result=(scan.result + dup_phone_note).strip(),
         order=order_name,
         tag=delivery_tag,
         ts=scan.ts,
