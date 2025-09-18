@@ -214,7 +214,7 @@ def test_detect_delivery_tag_exact_match():
 
 
 def test_detect_delivery_tag_variants():
-    assert _detect_delivery_tag("SANDY") == "sand"
+    assert _detect_delivery_tag("SANDY") == "meta"
     assert _detect_delivery_tag("12livrey") == "12livery"
     assert _detect_delivery_tag("12 livery") == "12livery"
     assert _detect_delivery_tag("khaso") == ""
@@ -281,7 +281,7 @@ def test_tag_summary_counts_variants(client, monkeypatch):
     client.post("/scan", json={"barcode": "702"})
 
     after = client.get(f"/tag-summary?date={today}").json()
-    assert after.get("sand") >= before.get("sand") + 1
+    assert after.get("meta") >= before.get("meta") + 1
     assert after.get("12livery") >= before.get("12livery") + 1
 
 

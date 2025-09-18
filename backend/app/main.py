@@ -66,8 +66,9 @@ _TAG_VARIANTS = {
     "12livrey": "12livery",
     "fast": "fast",
     "oscario": "oscario",
-    "sand": "sand",
-    "sandy": "sand",
+    "meta": "meta",
+    "sand": "meta",
+    "sandy": "meta",
 }
 
 # List of canonical delivery tags.  This is derived from the variant mapping

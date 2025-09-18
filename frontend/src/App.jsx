@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { jsPDF } from "jspdf";
 import { Html5Qrcode } from "html5-qrcode";
 
 // Allow using a relative URL when VITE_API_BASE_URL is undefined.
@@ -10,7 +11,7 @@ const tagColors = {
   "12livery": "#a5d6a7",
   fast: "#90caf9",
   oscario: "#40e0d0",
-  sand: "#ffcc80",
+  meta: "#ffcc80",
   none: "#f28b82",
 };
 
@@ -23,8 +24,9 @@ const tagSynonyms = {
   "12 livery": "12livery",
   fast: "fast",
   oscario: "oscario",
-  sand: "sand",
-  sandy: "sand",
+  meta: "meta",
+  sand: "meta",
+  sandy: "meta",
 };
 
 export default function App() {
@@ -50,6 +52,7 @@ export default function App() {
   const [manualStatus, setManualStatus] = useState("");
   const [manualStore, setManualStore] = useState("");
   const [fulfilledCounts, setFulfilledCounts] = useState({});
+  const [searchText, setSearchText] = useState("");
   const [loadingCounts, setLoadingCounts] = useState(false);
   const [confirmDup, setConfirmDup] = useState({ show: false, barcode: "", reason: "", message: "" });
 
@@ -334,9 +337,45 @@ export default function App() {
     listTagCounts[t] = (listTagCounts[t] || 0) + 1;
   });
 
+  function digitsOnly(str) {
+    return (str || "").replace(/\D+/g, "");
+  }
+
+  function normalizePhoneDigits(str) {
+    let d = digitsOnly(str);
+    if (d.startsWith("212")) d = d.slice(3);
+    while (d.startsWith("0")) d = d.slice(1);
+    return d;
+  }
+
+  function normalizeOrderDigits(str) {
+    return digitsOnly(str);
+  }
+
+  function matchesSearch(row) {
+    const q = (searchText || "").trim();
+    if (!q) return true;
+    const qDigits = digitsOnly(q);
+    if (!qDigits) return true;
+
+    // Order match: contains digits anywhere
+    const orderDigits = normalizeOrderDigits(row.order_name);
+    if (orderDigits.includes(qDigits)) return true;
+
+    // Phone match: compare with normalization (ignore country code 212, spaces, dashes, leading zeros)
+    const rowPhoneNorm = normalizePhoneDigits(row.phone || "");
+    const qPhoneNorm = normalizePhoneDigits(qDigits);
+    if (!qPhoneNorm) return false;
+    return (
+      rowPhoneNorm.includes(qPhoneNorm) ||
+      qPhoneNorm.includes(rowPhoneNorm)
+    );
+  }
+
+  const filteredBySearch = scanRows.filter((r) => matchesSearch(r));
   const displayedList = scanTag
-    ? scanRows.filter((r) => detectTag(r.tags) === scanTag)
-    : scanRows;
+    ? filteredBySearch.filter((r) => detectTag(r.tags) === scanTag)
+    : filteredBySearch;
 
   return (
     <div className="container">
@@ -436,6 +475,12 @@ export default function App() {
               value={scanDate}
               onChange={(e) => setScanDate(e.target.value)}
             />
+            <input
+              type="text"
+              placeholder="Search by order or phone"
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+            />
             <button className="btn" onClick={() => setShowManual(true)}>➕ Add Manually</button>
             <div className="tag-pills">
               <span
@@ -456,6 +501,43 @@ export default function App() {
                   {tag.toUpperCase()} ({count})
                 </span>
               ))}
+              {!!scanTag && (
+                <button
+                  className="btn"
+                  title="Generate PDF of order numbers and timestamps"
+                  onClick={() => {
+                    try {
+                      const doc = new jsPDF();
+                      const title = `Orders ${scanDate}${scanTag ? ` - ${scanTag.toUpperCase()}` : ""}`;
+                      doc.setFontSize(16);
+                      doc.text(title, 14, 18);
+                      doc.setFontSize(12);
+                      let y = 28;
+                      doc.text("Order #", 14, y);
+                      doc.text("Timestamp", 100, y);
+                      y += 6;
+                      displayedList.forEach((r) => {
+                        if (y > 280) {
+                          doc.addPage();
+                          y = 20;
+                        }
+                        const ts = new Date(r.ts).toLocaleString();
+                        doc.text(String(r.order_name || ""), 14, y);
+                        doc.text(ts, 100, y);
+                        y += 6;
+                      });
+                      const filename = `orders_${scanDate}${scanTag ? `_${scanTag}` : ""}.pdf`;
+                      doc.save(filename);
+                    } catch (e) {
+                      setToast("PDF generation failed");
+                      setTimeout(() => setToast(""), 1500);
+                    }
+                  }}
+                  style={{ marginLeft: 8 }}
+                >
+                  🖨️ Generate PDF
+                </button>
+              )}
             </div>
           </div>
           <table className="scans-table">
