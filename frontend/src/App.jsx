@@ -53,6 +53,13 @@ export default function App() {
   const [manualStore, setManualStore] = useState("");
   const [fulfilledCounts, setFulfilledCounts] = useState({});
   const [searchText, setSearchText] = useState("");
+  function parseServerTs(ts) {
+    const s = String(ts || "");
+    // If the server datetime is naive (no timezone), assume UTC by appending 'Z'
+    const hasTz = /Z|[+-]\d{2}:?\d{2}$/.test(s);
+    return new Date(hasTz ? s : s + "Z");
+  }
+
   const [loadingCounts, setLoadingCounts] = useState(false);
   const [confirmDup, setConfirmDup] = useState({ show: false, barcode: "", reason: "", message: "" });
 
@@ -521,7 +528,7 @@ export default function App() {
                           doc.addPage();
                           y = 20;
                         }
-                        const ts = new Date(r.ts).toLocaleString();
+                        const ts = parseServerTs(r.ts).toLocaleString();
                         doc.text(String(r.order_name || ""), 14, y);
                         doc.text(ts, 100, y);
                         y += 6;
@@ -582,7 +589,7 @@ export default function App() {
                       ))}
                     </select>
                   </td>
-                  <td>{new Date(r.ts).toLocaleTimeString()}</td>
+                  <td>{parseServerTs(r.ts).toLocaleTimeString()}</td>
                   <td>
                     <button
                       className="delete-btn"
