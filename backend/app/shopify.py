@@ -156,21 +156,20 @@ async def find_order(order_name: str) -> Dict[str, str]:
                     order = await _fetch_order(session, store, order_name)
                     return store, order
                 except Exception as e:
+                    # On final attempt, return the exception so we can ignore it later
                     if attempt == CONFIG["RETRY_ATTEMPTS"]:
-                        raise RuntimeError(
-                            f"{store['name']} lookup failed: {e}"
-                        ) from e
+                        return e
                     await asyncio.sleep(CONFIG["RETRY_DELAY"] * attempt)
 
         tasks = [lookup(s) for s in _stores()]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
-    errors = [r for r in results if isinstance(r, Exception)]
-    if errors:
-        raise errors[0]
-
+    # Collect only successful (store, order) tuples
     orders = []
-    for store, order in results:  # type: ignore[misc]
+    for r in results:
+        if isinstance(r, Exception):
+            continue
+        store, order = r  # type: ignore[misc]
         if not order:
             continue
         created = dt.datetime.fromisoformat(

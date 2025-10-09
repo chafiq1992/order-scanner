@@ -166,7 +166,20 @@ async def scan(data: ScanIn, background_tasks: BackgroundTasks):
                     reason="order_duplicate",
                 )
 
-    order = await shopify.find_order(order_name)
+    try:
+        order = await shopify.find_order(order_name)
+    except Exception as e:
+        # Avoid surfacing 500s when Shopify/store lookups fail
+        raise HTTPException(502, f"Shopify lookup failed: {e}")
+
+    # If no store returned a match, don't create a scan entry
+    if (order.get("result") or "") == "❌ Not Found":
+        return ScanOut(
+            result="❌ Order not found — not added",
+            order=order_name,
+            tag="",
+            ts=datetime.utcnow(),
+        )
 
     if order["fulfillment"].lower() == "unfulfilled" and not order["tags"]:
         return ScanOut(
