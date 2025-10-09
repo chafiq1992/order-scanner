@@ -40,16 +40,18 @@ def _stores_from_individual_vars() -> List[Dict[str, str]]:
         # required companions
         pwd_var = f"{store_id}_PASSWORD"
         dom_var = f"{store_id}_DOMAIN"
+        # Skip incomplete store configurations instead of raising
         if pwd_var not in env or dom_var not in env:
-            raise RuntimeError(
-                f"Missing {pwd_var} or {dom_var} for store {store_id}"
-            )
+            continue
+        domain = _normalize_domain(env.get(dom_var, ""))
+        if not value or not env.get(pwd_var) or not domain:
+            continue
         stores.append(
             {
-                "name": store_id.lower(),          # e.g. "irrakids"
+                "name": store_id.lower(),
                 "api_key": value,
                 "password": env[pwd_var],
-                "domain": _normalize_domain(env[dom_var]),
+                "domain": domain,
             }
         )
     return stores
@@ -64,13 +66,22 @@ def _stores() -> List[Dict[str, str]]:
     json_blob = os.getenv("SHOPIFY_STORES_JSON")
     if json_blob:
         try:
-            stores = json.loads(json_blob)
-            for s in stores:
-                if "domain" in s:
-                    s["domain"] = _normalize_domain(s["domain"])
-            return stores
-        except json.JSONDecodeError as e:
-            raise RuntimeError("SHOPIFY_STORES_JSON is not valid JSON") from e
+            raw_stores = json.loads(json_blob)
+        except json.JSONDecodeError:
+            # Ignore invalid JSON and behave as if no stores are configured
+            return []
+        validated: List[Dict[str, str]] = []
+        for s in raw_stores or []:
+            name = (s.get("name") or "").lower()
+            api_key = s.get("api_key") or ""
+            password = s.get("password") or ""
+            domain = _normalize_domain(s.get("domain") or "")
+            # Keep only fully specified stores
+            if name and api_key and password and domain:
+                validated.append(
+                    {"name": name, "api_key": api_key, "password": password, "domain": domain}
+                )
+        return validated
 
     # fall back to individual env-vars
     return _stores_from_individual_vars()
