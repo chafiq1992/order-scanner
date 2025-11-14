@@ -12,6 +12,10 @@ const tagColors = {
   fast: "#90caf9",
   oscario: "#40e0d0",
   meta: "#ffcc80",
+  lx: "#d1c4e9",
+  pal: "#ffd54f",
+  l24: "#b2dfdb",
+  ibex: "#b3e5fc",
   none: "#f28b82",
 };
 
@@ -27,6 +31,10 @@ const tagSynonyms = {
   meta: "meta",
   sand: "meta",
   sandy: "meta",
+  lx: "lx",
+  pal: "pal",
+  l24: "l24",
+  ibex: "ibex",
 };
 
 export default function App() {
@@ -360,23 +368,27 @@ export default function App() {
   }
 
   function matchesSearch(row) {
-    const q = (searchText || "").trim();
-    if (!q) return true;
-    const qDigits = digitsOnly(q);
-    if (!qDigits) return true;
+    const qRaw = (searchText || "").trim();
+    if (!qRaw) return true;
+    const q = qRaw.toLowerCase();
 
-    // Order match: contains digits anywhere
-    const orderDigits = normalizeOrderDigits(row.order_name);
-    if (orderDigits.includes(qDigits)) return true;
+    // Text match on order name
+    if ((row.order_name || "").toLowerCase().includes(q)) return true;
 
-    // Phone match: compare with normalization (ignore country code 212, spaces, dashes, leading zeros)
-    const rowPhoneNorm = normalizePhoneDigits(row.phone || "");
-    const qPhoneNorm = normalizePhoneDigits(qDigits);
-    if (!qPhoneNorm) return false;
-    return (
-      rowPhoneNorm.includes(qPhoneNorm) ||
-      qPhoneNorm.includes(rowPhoneNorm)
-    );
+    // Digit-based matching for orders and phones
+    const qDigits = digitsOnly(qRaw);
+    if (qDigits) {
+      const orderDigits = normalizeOrderDigits(row.order_name);
+      if (orderDigits.includes(qDigits)) return true;
+
+      const rowPhoneNorm = normalizePhoneDigits(row.phone || "");
+      const qPhoneNorm = normalizePhoneDigits(qDigits);
+      if (qPhoneNorm) {
+        if (rowPhoneNorm.includes(qPhoneNorm) || qPhoneNorm.includes(rowPhoneNorm)) return true;
+      }
+    }
+
+    return false;
   }
 
   const filteredBySearch = scanRows.filter((r) => matchesSearch(r));
@@ -496,7 +508,9 @@ export default function App() {
               >
                 All ({scanRows.length})
               </span>
-              {Object.entries(listTagCounts).map(([tag, count]) => (
+              {Object.entries(listTagCounts)
+                .filter(([tag]) => tag !== "big")
+                .map(([tag, count]) => (
                 <span
                   key={tag}
                   className={`tag-pill ${scanTag === tag ? "active" : ""}`}

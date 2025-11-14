@@ -69,6 +69,10 @@ _TAG_VARIANTS = {
     "meta": "meta",
     "sand": "meta",
     "sandy": "meta",
+    "lx": "lx",
+    "pal": "pal",
+    "l24": "l24",
+    "ibex": "ibex",
 }
 
 # List of canonical delivery tags.  This is derived from the variant mapping
