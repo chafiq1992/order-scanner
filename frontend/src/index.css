@@ -161,10 +161,26 @@ h1 { color: #4c51bf; margin:0 0 1rem; font-size:1.8rem; font-weight:700; text-sh
 @keyframes bump { 0%,100% { transform:scale(1); } 50% { transform:scale(1.2); } }
 @media (max-width:768px) {
   body { padding:0.5rem; }
-  h1 { font-size:2rem; }
-  .header { padding:1.5rem; }
-  .scan-btn { padding:1rem 2rem; font-size:1.3rem; }
-  .order-name { font-size:1rem; padding:0.3rem 0.5rem; }
+  .container { padding-bottom:6rem; }
+  .tab-bar button { padding:0.4rem 0.8rem; font-size:0.9rem; border-radius:8px; }
+  h1 { font-size:1.3rem; }
+  .header { padding:0.75rem; margin-bottom:0.6rem; }
+  #reader { padding:8px; border-radius:12px; margin:0 auto 0.4rem; border-width:2px; max-height:38vh; }
+  #result { margin:0.4rem 0; font-size:1rem; min-height:2.2em; padding:0.5rem; }
+  .scan-btn { padding:0.5rem 0.8rem; font-size:0.95rem; gap:0.5em; border-radius:12px; }
+  .scan-btn .emoji { font-size:1.1em; }
+  #scan-log { padding:0.75rem; border-radius:16px; }
+  #orderList { max-height:52vh; }
+  .order-item { margin-bottom:0.35rem; padding:0.45rem; gap:0.4rem; border-left-width:3px; }
+  .order-name { font-size:0.95rem; padding:0.15rem 0.4rem; border-width:2px; }
+  .order-status-text { font-size:0.85rem; }
+  .order-tag { font-size:0.8rem; padding:0.05em 0.4em; margin:0.05em; }
+  #tagSummary { gap:0.3rem; padding:0.15rem 0; }
+  .summary-box { padding:0.2rem 0.4rem; min-width:52px; }
+  .summary-name { font-size:0.7rem; }
+  .summary-count { font-size:1rem; }
+  .bottom-bar { padding:0.5rem; gap:0.2rem; border-radius:16px 16px 0 0; }
+  .tag-pill { padding:0.2rem 0.5rem; }
 }
 
 .delete-btn {
