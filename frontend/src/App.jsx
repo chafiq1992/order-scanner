@@ -140,11 +140,24 @@ export default function App() {
 
       if (navigator.vibrate) navigator.vibrate(60);
       setResult("⏳ Processing scan...");
-      // Do NOT pause; keep scanning continuously for speed
+      
+      // Stop scanning immediately
+      if (scannerRef.current) {
+         scannerRef.current.stop().then(() => {
+             setScanning(false);
+             setShowAgain(true);
+         }).catch(() => {
+             setScanning(false);
+             setShowAgain(true);
+         });
+      } else {
+          setScanning(false);
+          setShowAgain(true);
+      }
+
       // Show instantly in the list
       addOrderToList({ result: "⏳ Processing", order: code, tag: "", ts: new Date().toISOString() });
       processScan(code);
-      setShowAgain(false);
     };
 
     const handleStartError = () => {
@@ -183,19 +196,16 @@ export default function App() {
       scannerRef.current = qr;
       startNew();
     } else {
-      qr
-        .resume()
-        .then(() => {
-          hideLibraryInfo();
-          verifyVideo();
-        })
-        .catch(() => {
-          qr.stop().catch(() => {});
-          qr.clear();
-          qr = new Html5Qrcode(readerRef.current.id);
-          scannerRef.current = qr;
-          startNew();
-        });
+      // Try to recover state
+      try {
+        if (qr.isScanning) {
+           return;
+        }
+        startNew();
+      } catch (e) {
+         // If error checking state, just try to start
+         startNew();
+      }
     }
   }
 
@@ -233,8 +243,9 @@ export default function App() {
       updateScanUI(data);
     } catch (e) {
       enqueuePending(barcode);
-      setToast("Saved to retry \u21bb");
-      setTimeout(() => setToast(""), 1200);
+      // Don't show toast for automatic retries to avoid spam
+      // setToast("Saved to retry \u21bb");
+      // setTimeout(() => setToast(""), 1200);
     }
   }
 
@@ -273,6 +284,8 @@ export default function App() {
         setPopupTag({ tag, color: tagColors[(tag || "none").toLowerCase()] || tagColors["none"] });
         setTimeout(() => setPopupTag(null), 1500);
       }
+      // Trigger summary update logic more explicitly for animation
+      fetchSummary();
     } else {
       playErrorSound();
     }
