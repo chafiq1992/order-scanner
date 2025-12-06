@@ -54,6 +54,7 @@ export default function App() {
   const [scanDate, setScanDate] = useState(new Date().toISOString().slice(0, 10));
   const [scanTag, setScanTag] = useState("");
   const [toast, setToast] = useState("");
+  const [popupTag, setPopupTag] = useState(null); // { tag, color }
   const [flashRow, setFlashRow] = useState(null);
   const [showManual, setShowManual] = useState(false);
   const [manualOrder, setManualOrder] = useState("");
@@ -267,6 +268,10 @@ export default function App() {
     setResultClass(resultClassFrom(res));
     if (res.includes("✅")) {
       playSuccessSound();
+      if (tag) {
+        setPopupTag({ tag, color: tagColors[(tag || "none").toLowerCase()] || tagColors["none"] });
+        setTimeout(() => setPopupTag(null), 1500);
+      }
     } else {
       playErrorSound();
     }
@@ -471,6 +476,14 @@ export default function App() {
               ref={readerRef}
               className={scanning ? "scanning" : ""}
             ></div>
+            {popupTag && (
+              <div
+                className="tag-popup"
+                style={{ backgroundColor: popupTag.color }}
+              >
+                {popupTag.tag.toUpperCase()}
+              </div>
+            )}
             {result && (
               <div id="result" className={resultClass}>
                 {result}
@@ -478,22 +491,29 @@ export default function App() {
             )}
           </div>
           <div id="scan-log">
-            <div className="section-header">
-              <span>📋</span>Recent Scans
-            </div>
             <ul id="orderList">
-              {displayedOrders.map((o, i) => (
-                <li key={i} className={`order-item ${statusClass(o.result)}`}>
-                  <span className="order-name">{o.order}</span>
-                  <span
-                    className="order-tag"
-                    style={{ background: tagColors[(o.tag || "none").toLowerCase()] || tagColors["none"] }}
+              {displayedOrders.map((o, i) => {
+                const tColor = tagColors[(o.tag || "none").toLowerCase()] || tagColors["none"];
+                return (
+                  <li
+                    key={i}
+                    className={`order-item ${statusClass(o.result)}`}
+                    style={{
+                      borderLeftColor: tColor,
+                      background: `linear-gradient(90deg, ${tColor}22 0%, transparent 100%)`
+                    }}
                   >
-                    {o.tag || "No tag"}
-                  </span>
-                  <span className="order-status-text">{o.result}</span>
-                </li>
-              ))}
+                    <span className="order-name">{o.order}</span>
+                    <span
+                      className="order-tag"
+                      style={{ background: tColor }}
+                    >
+                      {o.tag || "No tag"}
+                    </span>
+                    <span className="order-status-text">{o.result}</span>
+                  </li>
+                );
+              })}
             </ul>
           </div>
           <div className="bottom-bar">
