@@ -76,7 +76,6 @@ export default function App() {
 
   useEffect(() => {
     fetchSummary();
-    const id = setInterval(fetchSummary, 5000);
     const stored = localStorage.getItem("orders");
     if (stored) {
       try {
@@ -85,7 +84,6 @@ export default function App() {
         setOrders(list.filter((o) => o.ts && o.ts.startsWith(today)));
       } catch {}
     }
-    return () => clearInterval(id);
   }, []);
 
   useEffect(() => {
@@ -124,11 +122,14 @@ export default function App() {
     const config = {
       fps: 25,
       qrbox: (vw, vh) => {
-        const size = Math.floor(Math.min(vw, vh) * 0.55);
-        return { width: size, height: size };
+        // Use a larger scan area. Since the container is wide and short, 
+        // we want to use most of the height.
+        // We'll use a rectangular box that fits well.
+        return { width: vw * 0.8, height: vh * 0.8 };
       },
       experimentalFeatures: { useBarCodeDetectorIfSupported: true },
       disableFlip: true,
+      aspectRatio: 1.0, 
     };
     const onScan = (code) => {
       const now = Date.now();
