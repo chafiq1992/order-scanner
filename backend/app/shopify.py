@@ -5,6 +5,7 @@ import json
 import os
 import re
 import datetime as dt
+import time
 from typing import Any, Dict, List
 
 
@@ -147,6 +148,19 @@ async def find_order(order_name: str) -> Dict[str, str]:
 
     Returns the first recent match (newest order within ORDER_CUTOFF_DAYS).
     """
+    # Simple in-process cache to speed up repeated lookups for the same order
+    # within a short window during concurrent scans.
+    CACHE_TTL_SEC = 300
+    cache_key = f"find_order::{order_name}"
+    _cache = getattr(find_order, "_cache", None)
+    if _cache is None:
+        _cache = {}
+        setattr(find_order, "_cache", _cache)  # type: ignore[attr-defined]
+    now_ts = time.time()
+    cached = _cache.get(cache_key)  # type: ignore[index]
+    if cached and now_ts - cached[0] < CACHE_TTL_SEC:  # type: ignore[index]
+        return dict(cached[1])  # shallow copy
+
     now = dt.datetime.now(dt.timezone.utc)
     cutoff = now - dt.timedelta(days=CONFIG["ORDER_CUTOFF_DAYS"])
     best: Dict[str, str] = {
@@ -211,6 +225,8 @@ async def find_order(order_name: str) -> Dict[str, str]:
         }
         return best
 
+    # Store in cache
+    _cache[cache_key] = (now_ts, dict(best))  # type: ignore[index]
     return best
 
 

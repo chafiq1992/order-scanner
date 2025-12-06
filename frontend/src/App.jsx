@@ -40,6 +40,7 @@ const tagSynonyms = {
 export default function App() {
   const readerRef = useRef(null);
   const scannerRef = useRef(null);
+  const recentCodesRef = useRef(new Map()); // code -> lastSeenMs for dedup within a short window
   const [tab, setTab] = useState("scan");
   const [result, setResult] = useState("");
   const [resultClass, setResultClass] = useState("");
@@ -70,6 +71,7 @@ export default function App() {
 
   const [loadingCounts, setLoadingCounts] = useState(false);
   const [confirmDup, setConfirmDup] = useState({ show: false, barcode: "", reason: "", message: "" });
+  const processingPendingRef = useRef(false);
 
   useEffect(() => {
     fetchSummary();
@@ -119,23 +121,28 @@ export default function App() {
 
     let qr = scannerRef.current;
     const config = {
-      fps: 15,
+      fps: 25,
       qrbox: (vw, vh) => {
-        const size = Math.floor(Math.min(vw, vh) * 0.8);
+        const size = Math.floor(Math.min(vw, vh) * 0.55);
         return { width: size, height: size };
       },
       experimentalFeatures: { useBarCodeDetectorIfSupported: true },
       disableFlip: true,
     };
     const onScan = (code) => {
-      if (navigator.vibrate) navigator.vibrate(100);
+      const now = Date.now();
+      const last = recentCodesRef.current.get(code) || 0;
+      // Ignore repeated reads of the same code within 2 seconds
+      if (now - last < 2000) return;
+      recentCodesRef.current.set(code, now);
+
+      if (navigator.vibrate) navigator.vibrate(60);
       setResult("⏳ Processing scan...");
-      qr.pause(true);
-      setScanning(false);
+      // Do NOT pause; keep scanning continuously for speed
       // Show instantly in the list
       addOrderToList({ result: "⏳ Processing", order: code, tag: "", ts: new Date().toISOString() });
       processScan(code);
-      setShowAgain(true);
+      setShowAgain(false);
     };
 
     const handleStartError = () => {
@@ -190,6 +197,22 @@ export default function App() {
     }
   }
 
+  function getPendingQueue() {
+    try {
+      return JSON.parse(localStorage.getItem("pendingScans") || "[]");
+    } catch {
+      return [];
+    }
+  }
+  function setPendingQueue(q) {
+    localStorage.setItem("pendingScans", JSON.stringify(q));
+  }
+  function enqueuePending(barcode) {
+    const q = getPendingQueue();
+    q.push({ barcode, ts: Date.now() });
+    setPendingQueue(q);
+  }
+
   async function processScan(barcode, opts = { confirm_duplicate: false }) {
     try {
       const resp = await fetch(`${apiBase}/scan`, {
@@ -202,14 +225,34 @@ export default function App() {
         setResult(`${statusIcon(data.result)} ${data.result}`);
         setResultClass("result-warning");
         setConfirmDup({ show: true, barcode, reason: data.reason || "", message: data.result });
-        setShowAgain(true);
+        setShowAgain(false);
         return;
       }
       updateScanUI(data);
     } catch (e) {
-      handleScanError("Server error");
+      enqueuePending(barcode);
+      setToast("Saved to retry \u21bb");
+      setTimeout(() => setToast(""), 1200);
     }
   }
+
+  useEffect(() => {
+    const run = async () => {
+      if (processingPendingRef.current) return;
+      const q = getPendingQueue();
+      if (!q.length) return;
+      processingPendingRef.current = true;
+      try {
+        const next = q.shift();
+        setPendingQueue(q);
+        await processScan(next.barcode);
+      } finally {
+        processingPendingRef.current = false;
+      }
+    };
+    const id = setInterval(run, 2000);
+    return () => clearInterval(id);
+  }, []);
 
 
   function handleScanError(msg) {

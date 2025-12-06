@@ -8,6 +8,7 @@ import re
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from sqlalchemy import inspect
+from sqlalchemy.exc import IntegrityError
 
 
 @asynccontextmanager
@@ -34,6 +35,13 @@ async def lifespan(app: FastAPI):
             await conn.execute(
                 text("ALTER TABLE scans ADD COLUMN phone VARCHAR DEFAULT ''")
             )
+
+        # Create a unique index on order_name to avoid duplicate inserts during concurrent scans.
+        try:
+            await conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_scans_order_name ON scans(order_name)"))
+        except Exception:
+            # Ignore if DB does not support IF NOT EXISTS or duplicates exist
+            pass
 
     yield
 
@@ -230,7 +238,22 @@ async def scan(data: ScanIn, background_tasks: BackgroundTasks):
     )
     async with database.AsyncSessionLocal() as db:
         db.add(scan)
-        await db.commit()
+        try:
+            await db.commit()
+        except IntegrityError:
+            # Another request already created this scan; load and return as already scanned
+            await db.rollback()
+            stmt = select(models.Scan).where(models.Scan.order_name == order_name).limit(1)
+            q = await db.execute(stmt)
+            row = q.scalar()
+            return ScanOut(
+                result="⚠️ Already Scanned",
+                order=order_name,
+                tag=_detect_delivery_tag(row.tags if row else ""),
+                ts=(row.ts if row else datetime.utcnow()),
+                needs_confirmation=True,
+                reason="order_duplicate",
+            )
 
     background_tasks.add_task(
         sheets.append_row,
