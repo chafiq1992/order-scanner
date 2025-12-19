@@ -73,6 +73,7 @@ export default function App() {
   const [loadingCounts, setLoadingCounts] = useState(false);
   const [confirmDup, setConfirmDup] = useState({ show: false, barcode: "", reason: "", message: "" });
   const processingPendingRef = useRef(false);
+  const [editTag, setEditTag] = useState(null); // { scan_id, order, currentTag, nextTag }
 
   useEffect(() => {
     fetchSummary();
@@ -165,28 +166,70 @@ export default function App() {
         qr.stop().catch(() => {});
         qr.clear();
       }
-      handleScanError("Camera access denied or not available");
+      const isHttps = window.location.protocol === "https:" || window.location.hostname === "localhost";
+      const msg = isHttps
+        ? "Camera access denied or not available"
+        : "Camera requires HTTPS on iPhone Safari (open via https://)";
+      handleScanError(msg);
       setScanning(false);
       setShowStart(true);
     };
 
+    const applyIosVideoAttrs = () => {
+      const root = readerRef.current;
+      if (!root) return;
+      const vid = root.querySelector("video");
+      if (!vid) return;
+      // iPhone Safari needs inline playback for camera video
+      vid.setAttribute("playsinline", "true");
+      vid.setAttribute("webkit-playsinline", "true");
+      vid.muted = true;
+      vid.autoplay = true;
+      // Try to kick video playback; ignore failures
+      vid.play?.().catch?.(() => {});
+    };
+
     const verifyVideo = () => {
-      setTimeout(() => {
+      const startedAt = Date.now();
+      const tick = () => {
         const root = readerRef.current;
         if (!root) return;
         const vid = root.querySelector("video");
-        if (!vid || !vid.videoWidth || !vid.videoHeight) {
+        applyIosVideoAttrs();
+        // On iOS, videoWidth/Height can remain 0 for a moment even when stream is OK
+        if (vid && vid.srcObject) return;
+        if (Date.now() - startedAt > 3500) {
           handleStartError();
+          return;
         }
-      }, 500);
+        setTimeout(tick, 250);
+      };
+      setTimeout(tick, 250);
     };
 
     const startNew = () => {
-      qr
-        .start({ facingMode: "environment" }, config, onScan, () => {})
-        .then(() => {
-          hideLibraryInfo();
-          verifyVideo();
+      const startWith = (camera) =>
+        qr
+          .start(camera, config, onScan, () => {})
+          .then(() => {
+            hideLibraryInfo();
+            applyIosVideoAttrs();
+            verifyVideo();
+          });
+
+      // Prefer environment camera; if iOS/Safari is picky, fall back to an explicit cameraId
+      startWith({ facingMode: { ideal: "environment" } })
+        .catch(async () => {
+          try {
+            const cams = await Html5Qrcode.getCameras();
+            const back =
+              [...(cams || [])].reverse().find((c) => /back|rear|environment/i.test(c.label || "")) ||
+              (cams || [])[cams.length - 1];
+            if (back?.id) {
+              return startWith(back.id);
+            }
+          } catch {}
+          throw new Error("start_failed");
         })
         .catch(handleStartError);
     };
@@ -275,7 +318,7 @@ export default function App() {
   }
 
   function updateScanUI(data) {
-    const { result: res, order, tag, ts } = data;
+    const { result: res, order, tag, ts, scan_id } = data;
     setResult(`${statusIcon(res)} ${res}`);
     setResultClass(resultClassFrom(res));
     if (res.includes("✅")) {
@@ -293,9 +336,9 @@ export default function App() {
     setOrders((prev) => {
       if (prev.length && (prev[0].result || "").startsWith("⏳")) {
         const [_first, ...rest] = prev;
-        return [{ result: res, order, tag, ts }, ...rest].slice(0, 20);
+        return [{ result: res, order, tag, ts, scan_id }, ...rest].slice(0, 20);
       }
-      return [{ result: res, order, tag, ts }, ...prev].slice(0, 20);
+      return [{ result: res, order, tag, ts, scan_id }, ...prev].slice(0, 20);
     });
     if (res.includes("Duplicate phone")) {
       setToast("⚠️ Duplicate phone in last 3 days");
@@ -306,6 +349,21 @@ export default function App() {
 
   function addOrderToList(item) {
     setOrders((prev) => [item, ...prev].slice(0, 20));
+  }
+
+  async function updateDeliveryTagFromScanList(scan_id, nextTag) {
+    const res = await fetch(`${apiBase}/scans/${scan_id}/delivery-tag`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tag: nextTag }),
+    });
+    if (!res.ok) {
+      setToast("Tag update failed");
+      setTimeout(() => setToast(""), 1500);
+      return null;
+    }
+    const row = await res.json();
+    return row;
   }
 
   async function fetchSummary() {
@@ -521,6 +579,16 @@ export default function App() {
                     <span
                       className="order-tag"
                       style={{ background: tColor }}
+                      title="Click to change delivery tag"
+                      onClick={() => {
+                        if (!o.scan_id) {
+                          setToast("Can't edit this item yet (missing scan id). Scan again.");
+                          setTimeout(() => setToast(""), 2000);
+                          return;
+                        }
+                        const current = (o.tag || "").toLowerCase();
+                        setEditTag({ scan_id: o.scan_id, order: o.order, currentTag: current, nextTag: current || "" });
+                      }}
                     >
                       {o.tag || "No tag"}
                     </span>
@@ -787,6 +855,57 @@ export default function App() {
             <div className="modal-actions">
               <button className="btn" onClick={() => setShowManual(false)}>Cancel</button>
               <button className="btn btn-primary" onClick={createManualScan}>Add</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {editTag && (
+        <div className="modal-overlay" onClick={() => setEditTag(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Change delivery tag</h3>
+            <p style={{ marginTop: 0, color: "#374151" }}>
+              Order: <strong>{editTag.order}</strong>
+            </p>
+            <div className="form-row">
+              <label>Tag</label>
+              <select
+                value={editTag.nextTag}
+                onChange={(e) => setEditTag((cur) => ({ ...cur, nextTag: e.target.value }))}
+              >
+                <option value="">None</option>
+                {Object.keys(tagColors)
+                  .filter((t) => t !== "none")
+                  .map((t) => (
+                    <option key={t} value={t}>
+                      {t.toUpperCase()}
+                    </option>
+                  ))}
+              </select>
+            </div>
+            <div className="modal-actions">
+              <button className="btn" onClick={() => setEditTag(null)}>
+                Cancel
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={async () => {
+                  const scanId = editTag.scan_id;
+                  const nextTag = (editTag.nextTag || "").toLowerCase();
+                  const updated = await updateDeliveryTagFromScanList(scanId, nextTag);
+                  if (updated) {
+                    const canonical = detectTag(updated.tags) || "";
+                    setOrders((prev) =>
+                      prev.map((x) => (x.scan_id === scanId ? { ...x, tag: canonical || "" } : x))
+                    );
+                    setToast("Tag updated ✓");
+                    setTimeout(() => setToast(""), 1200);
+                    fetchSummary();
+                    setEditTag(null);
+                  }
+                }}
+              >
+                Approve
+              </button>
             </div>
           </div>
         </div>

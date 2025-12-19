@@ -139,6 +139,21 @@ async def _fetch_order(
         return None
     return orders[0]
 
+
+async def _update_order_tags(
+    session: aiohttp.ClientSession, store: Dict[str, str], order_id: int, tags: str
+) -> None:
+    url = f"https://{store['domain']}/admin/api/2023-07/orders/{order_id}.json"
+    payload = {"order": {"id": order_id, "tags": tags}}
+    async with session.put(
+        url,
+        headers={**_auth_hdr(store["api_key"], store["password"]), "Content-Type": "application/json"},
+        data=json.dumps(payload),
+    ) as r:
+        if r.status not in (200, 201):
+            body = await r.text()
+            raise RuntimeError(f"{store['name']} update tags failed {r.status}: {body[:200]}")
+
 # ---------------- public API ------------------
 
 
@@ -228,6 +243,71 @@ async def find_order(order_name: str) -> Dict[str, str]:
     # Store in cache
     _cache[cache_key] = (now_ts, dict(best))  # type: ignore[index]
     return best
+
+
+def _replace_delivery_tag(tags: str, new_tag: str) -> str:
+    """Replace (or clear) the delivery tag in a comma/space separated tag list, preserving non-delivery tags."""
+    if not tags:
+        tags = ""
+    parts = [t.strip() for t in re.split(r",", tags) if t.strip()]
+    # If tags weren't comma-separated, fall back to whitespace split
+    if len(parts) <= 1 and " " in tags and "," not in tags:
+        parts = [t.strip() for t in re.split(r"\s+", tags) if t.strip()]
+
+    delivery = {"big", "k", "12livery", "12livrey", "fast", "oscario", "meta", "sand", "sandy", "lx", "pal", "l24", "ibex"}
+    kept: list[str] = []
+    for p in parts:
+        if p.lower().replace(" ", "") in delivery:
+            continue
+        kept.append(p)
+
+    new_tag = (new_tag or "").strip().lower()
+    if new_tag:
+        kept.append(new_tag)
+    return ", ".join([t for t in kept if t])
+
+
+async def update_order_delivery_tag(order_name: str, new_tag: str) -> None:
+    """Find the order by name across stores and update its delivery-company tag in Shopify."""
+    stores = _stores()
+    if not stores:
+        return
+
+    now = dt.datetime.now(dt.timezone.utc)
+    cutoff = now - dt.timedelta(days=CONFIG["ORDER_CUTOFF_DAYS"])
+
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(20)) as session:
+        async def lookup(store: Dict[str, str]):
+            for attempt in range(1, CONFIG["RETRY_ATTEMPTS"] + 1):
+                try:
+                    order = await _fetch_order(session, store, order_name)
+                    return store, order
+                except Exception as e:
+                    if attempt == CONFIG["RETRY_ATTEMPTS"]:
+                        return e
+                    await asyncio.sleep(CONFIG["RETRY_DELAY"] * attempt)
+
+        results = await asyncio.gather(*[lookup(s) for s in stores], return_exceptions=True)
+
+        candidates: list[tuple[dt.datetime, Dict[str, str], Dict[str, Any]]] = []
+        for r in results:
+            if isinstance(r, Exception):
+                continue
+            store, order = r  # type: ignore[misc]
+            if not order:
+                continue
+            created = dt.datetime.fromisoformat(order["created_at"].replace("Z", "+00:00"))
+            candidates.append((created, store, order))
+
+        candidates.sort(key=lambda x: x[0], reverse=True)
+        for created, store, order in candidates:
+            if created < cutoff:
+                continue
+            order_id = int(order.get("id"))
+            current_tags = order.get("tags") or ""
+            next_tags = _replace_delivery_tag(current_tags, new_tag)
+            await _update_order_tags(session, store, order_id, next_tags)
+            return
 
 
 async def _orders_count(

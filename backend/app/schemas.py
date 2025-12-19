@@ -10,12 +10,17 @@ class ScanIn(BaseModel):
 
 
 class ScanOut(BaseModel):
+    scan_id: int | None = None
     result: str
     order: str
     tag: str
     ts: datetime
     needs_confirmation: bool | None = False
     reason: str | None = ""
+
+
+class DeliveryTagUpdate(BaseModel):
+    tag: str | None = ""
 
 
 class ScanRecord(BaseModel):

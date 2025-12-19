@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Response
 from fastapi.staticfiles import StaticFiles
-from .schemas import ScanIn, ScanOut, ScanRecord, ScanUpdate, ScanCreate
+from .schemas import ScanIn, ScanOut, ScanRecord, ScanUpdate, ScanCreate, DeliveryTagUpdate
 from . import shopify, database, models, sheets
 from sqlalchemy import select, text
 import os
@@ -170,6 +170,7 @@ async def scan(data: ScanIn, background_tasks: BackgroundTasks):
         if row := q.scalar():
             if not (data.confirm_duplicate or False):
                 return ScanOut(
+                    scan_id=row.id,
                     result="⚠️ Already Scanned",
                     order=row.order_name,
                     tag=_detect_delivery_tag(row.tags),
@@ -187,6 +188,7 @@ async def scan(data: ScanIn, background_tasks: BackgroundTasks):
     # If no store returned a match, don't create a scan entry
     if (order.get("result") or "") == "❌ Not Found":
         return ScanOut(
+            scan_id=None,
             result="❌ Order not found — not added",
             order=order_name,
             tag="",
@@ -195,6 +197,7 @@ async def scan(data: ScanIn, background_tasks: BackgroundTasks):
 
     if order["fulfillment"].lower() == "unfulfilled" and not order["tags"]:
         return ScanOut(
+            scan_id=None,
             result="❌ Unfulfilled order with no tag — not added",
             order=order_name,
             tag="",
@@ -219,6 +222,7 @@ async def scan(data: ScanIn, background_tasks: BackgroundTasks):
             q = await db.execute(stmt)
             if q.scalar() and not (data.confirm_duplicate or False):
                 return ScanOut(
+                    scan_id=None,
                     result="⚠️ Duplicate phone in last 3 days",
                     order=order_name,
                     tag=delivery_tag,
@@ -247,6 +251,7 @@ async def scan(data: ScanIn, background_tasks: BackgroundTasks):
             q = await db.execute(stmt)
             row = q.scalar()
             return ScanOut(
+                scan_id=(row.id if row else None),
                 result="⚠️ Already Scanned",
                 order=order_name,
                 tag=_detect_delivery_tag(row.tags if row else ""),
@@ -268,11 +273,52 @@ async def scan(data: ScanIn, background_tasks: BackgroundTasks):
         ],
     )
     return ScanOut(
+        scan_id=scan.id,
         result=scan.result,
         order=order_name,
         tag=delivery_tag,
         ts=scan.ts,
     )
+
+
+def _replace_delivery_tag_in_tags(tags: str, new_tag: str) -> str:
+    """Replace (or clear) delivery-company tag in a Shopify-like tag string, preserving other tags."""
+    tokens = _tokenize_tags(tags or "")
+    kept: list[str] = []
+    for t in tokens:
+        low = t.lower().strip()
+        canonical = _TAG_VARIANTS.get(low) or _TAG_VARIANTS.get(low.replace(" ", ""))
+        if canonical and canonical in DELIVERY_TAGS:
+            continue
+        kept.append(t.strip())
+
+    new_tag = (new_tag or "").strip().lower()
+    if new_tag:
+        kept.append(new_tag)
+
+    # Use comma-separated output to match Shopify convention
+    return ", ".join([t for t in kept if t])
+
+
+@app.patch("/scans/{scan_id}/delivery-tag", response_model=ScanRecord)
+async def update_scan_delivery_tag(scan_id: int, data: DeliveryTagUpdate, background_tasks: BackgroundTasks):
+    new_tag = (data.tag or "").strip().lower()
+    if new_tag and new_tag not in DELIVERY_TAGS:
+        raise HTTPException(400, f"Invalid delivery tag: {new_tag}")
+
+    async with database.AsyncSessionLocal() as db:
+        scan = await db.get(models.Scan, scan_id)
+        if not scan:
+            raise HTTPException(404, "Scan not found")
+
+        scan.tags = _replace_delivery_tag_in_tags(scan.tags or "", new_tag)
+        await db.commit()
+        await db.refresh(scan)
+
+        # Update Shopify in background so UI is instant even if Shopify is slow
+        background_tasks.add_task(shopify.update_order_delivery_tag, scan.order_name, new_tag)
+
+        return ScanRecord.model_validate(scan.__dict__)
 
 
 @app.get("/tag-summary")
