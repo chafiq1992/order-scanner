@@ -118,6 +118,8 @@ export default function App() {
     setScanning(true);
     setShowStart(false);
     setShowAgain(false);
+    setToast("Starting camera...");
+    setTimeout(() => setToast(""), 1200);
 
     let qr = scannerRef.current;
     const config = {
@@ -183,6 +185,10 @@ export default function App() {
       // iPhone Safari needs inline playback for camera video
       vid.setAttribute("playsinline", "true");
       vid.setAttribute("webkit-playsinline", "true");
+      // Some iOS versions require the property, not only the attribute
+      try {
+        vid.playsInline = true;
+      } catch {}
       vid.muted = true;
       vid.autoplay = true;
       // Try to kick video playback; ignore failures
@@ -196,12 +202,16 @@ export default function App() {
         if (!root) return;
         const vid = root.querySelector("video");
         applyIosVideoAttrs();
-        // On iOS, videoWidth/Height can remain 0 for a moment even when stream is OK
-        if (vid && vid.srcObject) return;
-        if (Date.now() - startedAt > 3500) {
-          handleStartError();
-          return;
-        }
+        // On iOS, videoWidth/Height can remain 0 for a moment even when stream is OK.
+        // Also, some implementations don't expose srcObject reliably—use multiple signals.
+        const ok =
+          !!vid &&
+          (vid.readyState >= 2 ||
+            (vid.srcObject && vid.srcObject.getTracks && vid.srcObject.getTracks().length > 0) ||
+            vid.currentTime > 0);
+        if (ok) return;
+        // Don't hard-fail too aggressively; just keep trying for a bit longer.
+        if (Date.now() - startedAt > 8000) return;
         setTimeout(tick, 250);
       };
       setTimeout(tick, 250);
@@ -218,8 +228,14 @@ export default function App() {
           });
 
       // Prefer environment camera; if iOS/Safari is picky, fall back to an explicit cameraId
-      startWith({ facingMode: { ideal: "environment" } })
+      // 1) Most compatible form across browsers/libs
+      startWith({ facingMode: "environment" })
         .catch(async () => {
+          try {
+            // 2) Some browsers prefer the "ideal" constraint form
+            await startWith({ facingMode: { ideal: "environment" } });
+            return;
+          } catch {}
           try {
             const cams = await Html5Qrcode.getCameras();
             const back =
