@@ -41,13 +41,23 @@ export default function App() {
   const readerRef = useRef(null);
   const scannerRef = useRef(null);
   const recentCodesRef = useRef(new Map()); // code -> lastSeenMs for dedup within a short window
-  function tabFromPathname(pathname) {
+
+  function pageFromPathname(pathname) {
     const p = String(pathname || "/").toLowerCase();
     if (p === "/return-scan" || p.startsWith("/return-scan/")) return "return";
-    return "scan";
+    return "order";
   }
 
-  const [tab, setTab] = useState(() => tabFromPathname(window.location.pathname));
+  // Two separate pages (routes):
+  // - "/"              => order scanner app (existing)
+  // - "/return-scan"   => return scanner app (separate UI + separate list)
+  const [page, setPage] = useState(() => pageFromPathname(window.location.pathname));
+
+  // Order-scanner tabs (only used on the order page)
+  const [tab, setTab] = useState("scan");
+
+  // Return-scanner tabs (only used on the return page)
+  const [returnTab, setReturnTab] = useState("scan");
   const [result, setResult] = useState("");
   const [resultClass, setResultClass] = useState("");
   const [orders, setOrders] = useState([]);
@@ -126,28 +136,30 @@ export default function App() {
 
   // Allow direct links like /return-scan and browser back/forward.
   useEffect(() => {
-    const onPop = () => setTab(tabFromPathname(window.location.pathname));
+    const onPop = () => setPage(pageFromPathname(window.location.pathname));
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
-  function navigateTab(nextTab) {
-    setTab(nextTab);
-    if (nextTab === "return") {
-      if (window.location.pathname !== "/return-scan") {
-        window.history.pushState({}, "", "/return-scan");
-      }
-      return;
+  function goToOrderPage() {
+    if (window.location.pathname !== "/") {
+      window.history.pushState({}, "", "/");
     }
-    if (nextTab === "scan") {
-      if (window.location.pathname !== "/") {
-        window.history.pushState({}, "", "/");
-      }
-      return;
-    }
+    setPage("order");
   }
 
-  // If we switch tabs while the camera is running, stop and clear the scanner to avoid
+  function goToReturnPage() {
+    if (window.location.pathname !== "/return-scan") {
+      window.history.pushState({}, "", "/return-scan");
+    }
+    setPage("return");
+  }
+
+  function navigateOrderTab(nextTab) {
+    setTab(nextTab);
+  }
+
+  // If we switch pages/tabs while the camera is running, stop and clear the scanner to avoid
   // stale DOM references (the reader element is unmounted/remounted).
   useEffect(() => {
     const qr = scannerRef.current;
@@ -169,7 +181,7 @@ export default function App() {
       setReturnShowStart(true);
       setReturnShowAgain(false);
     })();
-  }, [tab]);
+  }, [page, tab, returnTab]);
 
   function hideLibraryInfo() {
     const root = readerRef.current;
@@ -804,31 +816,38 @@ export default function App() {
 
   return (
     <div className="container">
-      <div className="tab-bar">
-        <button
-          className={tab === "scan" ? "active" : ""}
-          onClick={() => navigateTab("scan")}
-        >
-          Scan
-        </button>
-        <button
-          className={tab === "list" ? "active" : ""}
-          onClick={() => navigateTab("list")}
-        >
-          Scanned Orders
-        </button>
-        <button
-          className={tab === "fulfilled" ? "active" : ""}
-          onClick={() => navigateTab("fulfilled")}
-        >
-          Shopify Fulfilled
-        </button>
-        <button className={tab === "return" ? "active" : ""} onClick={() => navigateTab("return")}>
-          Return Scanner
-        </button>
-      </div>
+      {page === "order" && (
+        <div className="tab-bar">
+          <button className={tab === "scan" ? "active" : ""} onClick={() => navigateOrderTab("scan")}>
+            Scan
+          </button>
+          <button className={tab === "list" ? "active" : ""} onClick={() => navigateOrderTab("list")}>
+            Scanned Orders
+          </button>
+          <button className={tab === "fulfilled" ? "active" : ""} onClick={() => navigateOrderTab("fulfilled")}>
+            Shopify Fulfilled
+          </button>
+          <button className="" onClick={goToReturnPage}>
+            Return Scanner
+          </button>
+        </div>
+      )}
+
+      {page === "return" && (
+        <div className="tab-bar">
+          <button className={returnTab === "scan" ? "active" : ""} onClick={() => setReturnTab("scan")}>
+            Scan Return
+          </button>
+          <button className={returnTab === "list" ? "active" : ""} onClick={() => setReturnTab("list")}>
+            Scanned Returns
+          </button>
+          <button className="" onClick={goToOrderPage}>
+            Order Scanner
+          </button>
+        </div>
+      )}
       {toast && <div className="toast">{toast}</div>}
-      {tab === "scan" && (
+      {page === "order" && tab === "scan" && (
         <>
           <div className="header">
             <h1>📦 Order Scanner</h1>
@@ -920,7 +939,7 @@ export default function App() {
           </div>
         </>
       )}
-      {tab === "return" && (
+      {page === "return" && returnTab === "scan" && (
         <>
           <div className="header">
             <h1>↩️ Return Scanner</h1>
@@ -930,29 +949,6 @@ export default function App() {
                 {returnResult}
               </div>
             )}
-          </div>
-          <div id="scan-log">
-            <ul id="orderList">
-              {returnOrders.map((o, i) => {
-                const meta = [
-                  o.store ? String(o.store).toUpperCase() : "",
-                  o.fulfillment ? String(o.fulfillment) : "",
-                  o.financial ? String(o.financial) : "",
-                  o.status ? String(o.status) : "",
-                ]
-                  .filter(Boolean)
-                  .join(" • ");
-                return (
-                  <li key={i} className={`order-item ${statusClass(o.result)}`}>
-                    <span className="order-name">{o.order}</span>
-                    <span className="order-status-text">
-                      {o.result}
-                      {meta ? ` — ${meta}` : ""}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
           </div>
           <div className="bottom-bar">
             {returnShowStart && (
@@ -968,7 +964,47 @@ export default function App() {
           </div>
         </>
       )}
-      {tab === "list" && (
+      {page === "return" && returnTab === "list" && (
+        <div className="table-card">
+          <div className="filters" style={{ justifyContent: "space-between" }}>
+            <div style={{ fontWeight: 700 }}>Scanned returns today: {returnOrders.length}</div>
+            <button
+              className="btn"
+              onClick={() => {
+                localStorage.removeItem("returnOrders");
+                setReturnOrders([]);
+              }}
+            >
+              🗑️ Clear
+            </button>
+          </div>
+          <table className="scans-table">
+            <thead>
+              <tr>
+                <th>Order #</th>
+                <th>Store</th>
+                <th>Fulfillment</th>
+                <th>Financial</th>
+                <th>Status</th>
+                <th>Result</th>
+              </tr>
+            </thead>
+            <tbody>
+              {returnOrders.map((o, i) => (
+                <tr key={i}>
+                  <td><strong>{o.order}</strong></td>
+                  <td>{(o.store || "").toUpperCase()}</td>
+                  <td>{o.fulfillment || ""}</td>
+                  <td>{o.financial || ""}</td>
+                  <td>{o.status || ""}</td>
+                  <td>{o.result || ""}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {page === "order" && tab === "list" && (
         <div className="table-card">
           <div className="filters">
             <input
@@ -1105,7 +1141,7 @@ export default function App() {
           </div>
         </div>
       )}
-      {tab === "fulfilled" && (
+      {page === "order" && tab === "fulfilled" && (
         <div className="table-card">
           <div className="filters">
             <input
