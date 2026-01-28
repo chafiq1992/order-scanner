@@ -18,6 +18,21 @@ class ScanOut(BaseModel):
     needs_confirmation: bool | None = False
     reason: str | None = ""
 
+class ReturnScanOut(BaseModel):
+    """Response for the Return Scanner flow.
+
+    Unlike the delivery scanner, return scanning is allowed for any fulfillment / status
+    as long as the order exists in Shopify.
+    """
+
+    result: str
+    order: str
+    store: str | None = ""
+    fulfillment: str | None = ""
+    status: str | None = ""
+    financial: str | None = ""
+    ts: datetime
+
 
 class DeliveryTagUpdate(BaseModel):
     tag: str | None = ""

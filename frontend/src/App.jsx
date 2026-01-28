@@ -41,15 +41,27 @@ export default function App() {
   const readerRef = useRef(null);
   const scannerRef = useRef(null);
   const recentCodesRef = useRef(new Map()); // code -> lastSeenMs for dedup within a short window
-  const [tab, setTab] = useState("scan");
+  function tabFromPathname(pathname) {
+    const p = String(pathname || "/").toLowerCase();
+    if (p === "/return-scan" || p.startsWith("/return-scan/")) return "return";
+    return "scan";
+  }
+
+  const [tab, setTab] = useState(() => tabFromPathname(window.location.pathname));
   const [result, setResult] = useState("");
   const [resultClass, setResultClass] = useState("");
   const [orders, setOrders] = useState([]);
+  const [returnResult, setReturnResult] = useState("");
+  const [returnResultClass, setReturnResultClass] = useState("");
+  const [returnOrders, setReturnOrders] = useState([]);
   const [summary, setSummary] = useState({});
   const [updatedTags, setUpdatedTags] = useState({});
   const [scanning, setScanning] = useState(false);
   const [showStart, setShowStart] = useState(true);
   const [showAgain, setShowAgain] = useState(false);
+  const [returnScanning, setReturnScanning] = useState(false);
+  const [returnShowStart, setReturnShowStart] = useState(true);
+  const [returnShowAgain, setReturnShowAgain] = useState(false);
   const [scanRows, setScanRows] = useState([]);
   const [scanDate, setScanDate] = useState(new Date().toISOString().slice(0, 10));
   const [scanTag, setScanTag] = useState("");
@@ -85,11 +97,23 @@ export default function App() {
         setOrders(list.filter((o) => o.ts && o.ts.startsWith(today)));
       } catch {}
     }
+    const storedReturns = localStorage.getItem("returnOrders");
+    if (storedReturns) {
+      try {
+        const list = JSON.parse(storedReturns);
+        const today = new Date().toISOString().slice(0, 10);
+        setReturnOrders(list.filter((o) => o.ts && o.ts.startsWith(today)));
+      } catch {}
+    }
   }, []);
 
   useEffect(() => {
     localStorage.setItem("orders", JSON.stringify(orders));
   }, [orders]);
+
+  useEffect(() => {
+    localStorage.setItem("returnOrders", JSON.stringify(returnOrders));
+  }, [returnOrders]);
 
   useEffect(() => {
     if (tab === "list") {
@@ -99,6 +123,53 @@ export default function App() {
       fetchFulfilledCounts();
     }
   }, [tab, scanDate, scanTag]);
+
+  // Allow direct links like /return-scan and browser back/forward.
+  useEffect(() => {
+    const onPop = () => setTab(tabFromPathname(window.location.pathname));
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  function navigateTab(nextTab) {
+    setTab(nextTab);
+    if (nextTab === "return") {
+      if (window.location.pathname !== "/return-scan") {
+        window.history.pushState({}, "", "/return-scan");
+      }
+      return;
+    }
+    if (nextTab === "scan") {
+      if (window.location.pathname !== "/") {
+        window.history.pushState({}, "", "/");
+      }
+      return;
+    }
+  }
+
+  // If we switch tabs while the camera is running, stop and clear the scanner to avoid
+  // stale DOM references (the reader element is unmounted/remounted).
+  useEffect(() => {
+    const qr = scannerRef.current;
+    if (!qr) return;
+    (async () => {
+      try {
+        if (qr.isScanning) {
+          await qr.stop();
+        }
+      } catch {}
+      try {
+        qr.clear();
+      } catch {}
+      scannerRef.current = null;
+      setScanning(false);
+      setReturnScanning(false);
+      setShowStart(true);
+      setShowAgain(false);
+      setReturnShowStart(true);
+      setReturnShowAgain(false);
+    })();
+  }, [tab]);
 
   function hideLibraryInfo() {
     const root = readerRef.current;
@@ -268,6 +339,159 @@ export default function App() {
     }
   }
 
+  function startReturnScanner() {
+    setReturnResult("");
+    setReturnResultClass("");
+    setReturnScanning(true);
+    setReturnShowStart(false);
+    setReturnShowAgain(false);
+    setToast("Starting camera...");
+    setTimeout(() => setToast(""), 1200);
+
+    let qr = scannerRef.current;
+    const config = {
+      fps: 25,
+      qrbox: (vw, vh) => {
+        return { width: vw * 0.8, height: vh * 0.8 };
+      },
+      experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+      disableFlip: true,
+      aspectRatio: 1.0,
+    };
+
+    const onScan = (code) => {
+      const now = Date.now();
+      const last = recentCodesRef.current.get(code) || 0;
+      if (now - last < 2000) return;
+      recentCodesRef.current.set(code, now);
+
+      if (navigator.vibrate) navigator.vibrate(60);
+      setReturnResult("⏳ Processing scan...");
+
+      if (scannerRef.current) {
+        scannerRef.current
+          .stop()
+          .then(() => {
+            setReturnScanning(false);
+            setReturnShowAgain(true);
+          })
+          .catch(() => {
+            setReturnScanning(false);
+            setReturnShowAgain(true);
+          });
+      } else {
+        setReturnScanning(false);
+        setReturnShowAgain(true);
+      }
+
+      addReturnOrderToList({
+        result: "⏳ Processing",
+        order: code,
+        store: "",
+        fulfillment: "",
+        status: "",
+        financial: "",
+        ts: new Date().toISOString(),
+      });
+      processReturnScan(code);
+    };
+
+    const handleStartError = () => {
+      if (qr) {
+        qr.stop().catch(() => {});
+        qr.clear();
+      }
+      const isHttps = window.location.protocol === "https:" || window.location.hostname === "localhost";
+      const msg = isHttps
+        ? "Camera access denied or not available"
+        : "Camera requires HTTPS on iPhone Safari (open via https://)";
+      setReturnResult(`❌ Error: ${msg}`);
+      setReturnResultClass("result-error");
+      playErrorSound();
+      setReturnScanning(false);
+      setReturnShowStart(true);
+    };
+
+    const applyIosVideoAttrs = () => {
+      const root = readerRef.current;
+      if (!root) return;
+      const vid = root.querySelector("video");
+      if (!vid) return;
+      vid.setAttribute("playsinline", "true");
+      vid.setAttribute("webkit-playsinline", "true");
+      try {
+        vid.playsInline = true;
+      } catch {}
+      vid.muted = true;
+      vid.autoplay = true;
+      vid.play?.().catch?.(() => {});
+    };
+
+    const verifyVideo = () => {
+      const startedAt = Date.now();
+      const tick = () => {
+        const root = readerRef.current;
+        if (!root) return;
+        const vid = root.querySelector("video");
+        applyIosVideoAttrs();
+        const ok =
+          !!vid &&
+          (vid.readyState >= 2 ||
+            (vid.srcObject && vid.srcObject.getTracks && vid.srcObject.getTracks().length > 0) ||
+            vid.currentTime > 0);
+        if (ok) return;
+        if (Date.now() - startedAt > 8000) return;
+        setTimeout(tick, 250);
+      };
+      setTimeout(tick, 250);
+    };
+
+    const startNew = () => {
+      const startWith = (camera) =>
+        qr
+          .start(camera, config, onScan, () => {})
+          .then(() => {
+            hideLibraryInfo();
+            applyIosVideoAttrs();
+            verifyVideo();
+          });
+
+      startWith({ facingMode: "environment" })
+        .catch(async () => {
+          try {
+            await startWith({ facingMode: { ideal: "environment" } });
+            return;
+          } catch {}
+          try {
+            const cams = await Html5Qrcode.getCameras();
+            const back =
+              [...(cams || [])].reverse().find((c) => /back|rear|environment/i.test(c.label || "")) ||
+              (cams || [])[cams.length - 1];
+            if (back?.id) {
+              return startWith(back.id);
+            }
+          } catch {}
+          throw new Error("start_failed");
+        })
+        .catch(handleStartError);
+    };
+
+    if (!qr) {
+      qr = new Html5Qrcode(readerRef.current.id);
+      scannerRef.current = qr;
+      startNew();
+    } else {
+      try {
+        if (qr.isScanning) {
+          return;
+        }
+        startNew();
+      } catch {
+        startNew();
+      }
+    }
+  }
+
   function getPendingQueue() {
     try {
       return JSON.parse(localStorage.getItem("pendingScans") || "[]");
@@ -305,6 +529,29 @@ export default function App() {
       // Don't show toast for automatic retries to avoid spam
       // setToast("Saved to retry \u21bb");
       // setTimeout(() => setToast(""), 1200);
+    }
+  }
+
+  async function processReturnScan(barcode) {
+    try {
+      const resp = await fetch(`${apiBase}/return-scan`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ barcode }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        const msg = data?.detail || "Return scan failed";
+        setReturnResult(`❌ Error: ${msg}`);
+        setReturnResultClass("result-error");
+        playErrorSound();
+        return;
+      }
+      updateReturnScanUI(data);
+    } catch (e) {
+      setReturnResult("❌ Error: Network error");
+      setReturnResultClass("result-error");
+      playErrorSound();
     }
   }
 
@@ -363,8 +610,31 @@ export default function App() {
     fetchSummary();
   }
 
+  function updateReturnScanUI(data) {
+    const { result: res, order, store, fulfillment, status, financial, ts } = data;
+    setReturnResult(`${statusIcon(res)} ${res}`);
+    setReturnResultClass(resultClassFrom(res));
+    if (res.includes("✅")) {
+      playSuccessSound();
+    } else {
+      playErrorSound();
+    }
+
+    setReturnOrders((prev) => {
+      if (prev.length && (prev[0].result || "").startsWith("⏳")) {
+        const [_first, ...rest] = prev;
+        return [{ result: res, order, store, fulfillment, status, financial, ts }, ...rest].slice(0, 20);
+      }
+      return [{ result: res, order, store, fulfillment, status, financial, ts }, ...prev].slice(0, 20);
+    });
+  }
+
   function addOrderToList(item) {
     setOrders((prev) => [item, ...prev].slice(0, 20));
+  }
+
+  function addReturnOrderToList(item) {
+    setReturnOrders((prev) => [item, ...prev].slice(0, 20));
   }
 
   async function updateDeliveryTagFromScanList(scan_id, nextTag) {
@@ -537,21 +807,24 @@ export default function App() {
       <div className="tab-bar">
         <button
           className={tab === "scan" ? "active" : ""}
-          onClick={() => setTab("scan")}
+          onClick={() => navigateTab("scan")}
         >
           Scan
         </button>
         <button
           className={tab === "list" ? "active" : ""}
-          onClick={() => setTab("list")}
+          onClick={() => navigateTab("list")}
         >
           Scanned Orders
         </button>
         <button
           className={tab === "fulfilled" ? "active" : ""}
-          onClick={() => setTab("fulfilled")}
+          onClick={() => navigateTab("fulfilled")}
         >
           Shopify Fulfilled
+        </button>
+        <button className={tab === "return" ? "active" : ""} onClick={() => navigateTab("return")}>
+          Return Scanner
         </button>
       </div>
       {toast && <div className="toast">{toast}</div>}
@@ -644,6 +917,54 @@ export default function App() {
                   <span className="emoji">🔄</span>Scan Again
                 </button>
               )}
+          </div>
+        </>
+      )}
+      {tab === "return" && (
+        <>
+          <div className="header">
+            <h1>↩️ Return Scanner</h1>
+            <div id="reader" ref={readerRef} className={returnScanning ? "scanning" : ""}></div>
+            {returnResult && (
+              <div id="result" className={returnResultClass}>
+                {returnResult}
+              </div>
+            )}
+          </div>
+          <div id="scan-log">
+            <ul id="orderList">
+              {returnOrders.map((o, i) => {
+                const meta = [
+                  o.store ? String(o.store).toUpperCase() : "",
+                  o.fulfillment ? String(o.fulfillment) : "",
+                  o.financial ? String(o.financial) : "",
+                  o.status ? String(o.status) : "",
+                ]
+                  .filter(Boolean)
+                  .join(" • ");
+                return (
+                  <li key={i} className={`order-item ${statusClass(o.result)}`}>
+                    <span className="order-name">{o.order}</span>
+                    <span className="order-status-text">
+                      {o.result}
+                      {meta ? ` — ${meta}` : ""}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+          <div className="bottom-bar">
+            {returnShowStart && (
+              <button className="scan-btn" id="scanBtnReturn" onClick={startReturnScanner}>
+                <span className="emoji">📷</span>Scan
+              </button>
+            )}
+            {returnShowAgain && (
+              <button className="scan-btn" id="againBtnReturn" onClick={startReturnScanner}>
+                <span className="emoji">🔄</span>Scan Again
+              </button>
+            )}
           </div>
         </>
       )}

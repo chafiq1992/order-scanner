@@ -182,6 +182,7 @@ async def find_order(order_name: str) -> Dict[str, str]:
         "tags": "",
         "fulfillment": "unfulfilled",
         "status": "open",
+        "financial": "",
         "store": "",
         "result": "❌ Not Found",
         "phone": "",
@@ -226,6 +227,7 @@ async def find_order(order_name: str) -> Dict[str, str]:
             "tags": order.get("tags") or "",
             "fulfillment": order.get("fulfillment_status") or "unfulfilled",
             "status": "closed" if order.get("cancelled_at") else "open",
+            "financial": order.get("financial_status") or "",
             "store": store["name"],
             "result": (
                 "⚠️ Cancelled"

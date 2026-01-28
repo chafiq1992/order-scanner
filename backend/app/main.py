@@ -1,6 +1,15 @@
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Response
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from .schemas import ScanIn, ScanOut, ScanRecord, ScanUpdate, ScanCreate, DeliveryTagUpdate
+from .schemas import (
+    ScanIn,
+    ScanOut,
+    ReturnScanOut,
+    ScanRecord,
+    ScanUpdate,
+    ScanCreate,
+    DeliveryTagUpdate,
+)
 from . import shopify, database, models, sheets
 from sqlalchemy import select, text
 import os
@@ -141,12 +150,57 @@ def _extract_canonical_tags(tag_str: str) -> list[str]:
 
 
 def _clean(barcode: str) -> str:
-    digits = _barcode_re.findall(barcode)
+    # Some systems prefix an order number with a merchant id, e.g. "7-125652".
+    # For these, keep only the part after the last dash before extracting digits.
+    s = str(barcode or "").strip()
+    if "-" in s:
+        s = s.split("-")[-1]
+
+    digits = _barcode_re.findall(s)
     digits = "".join(digits).lstrip("0")
     max_digits = shopify.CONFIG.get("MAX_DIGITS", 6)
     if not digits or len(digits) > max_digits:
         raise ValueError("Invalid barcode")
     return "#" + digits
+
+
+@app.post("/return-scan", response_model=ReturnScanOut)
+async def return_scan(data: ScanIn):
+    """Return scanner flow: normalize the barcode and verify it exists in Shopify.
+
+    Unlike /scan, this endpoint does NOT block on fulfillment/tag rules; it will
+    accept fulfilled/unfulfilled and any status as long as the order exists.
+    """
+    try:
+        order_name = _clean(data.barcode)
+    except ValueError:
+        raise HTTPException(400, "❌ Invalid barcode")
+
+    try:
+        order = await shopify.find_order(order_name)
+    except Exception as e:
+        raise HTTPException(502, f"Shopify lookup failed: {e}")
+
+    if (order.get("result") or "") == "❌ Not Found" or not (order.get("store") or ""):
+        return ReturnScanOut(
+            result="❌ Order not found",
+            order=order_name,
+            store="",
+            fulfillment="",
+            status="",
+            financial="",
+            ts=datetime.utcnow(),
+        )
+
+    return ReturnScanOut(
+        result="✅ Found",
+        order=order_name,
+        store=order.get("store") or "",
+        fulfillment=order.get("fulfillment") or "",
+        status=order.get("status") or "",
+        financial=order.get("financial") or "",
+        ts=datetime.utcnow(),
+    )
 
 
 @app.post("/scan", response_model=ScanOut)
@@ -467,6 +521,17 @@ async def fulfilled_counts(date: str | None = None):
 @app.get("/health")
 def health():
     return {"ok": True}
+
+
+# Allow deep-linking directly to the Return Scanner page.
+# This must be defined before the StaticFiles mount (which is a catch-all).
+@app.get("/return-scan")
+def return_scan_page():
+    static_root = os.getenv("STATIC_FILES_PATH", "static")
+    index_path = os.path.join(static_root, "index.html")
+    if not os.path.exists(index_path):
+        raise HTTPException(404, "Frontend not built")
+    return FileResponse(index_path)
 
 
 # Serve built frontend files if

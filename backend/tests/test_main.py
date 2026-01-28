@@ -108,6 +108,8 @@ def test_health_endpoint(client):
 def test_clean_valid():
     assert _clean("00123") == "#123"
     assert _clean("abc123def") == "#123"
+    assert _clean("7-125652") == "#125652"
+    assert _clean("i0125652") == "#125652"
 
 
 def test_clean_invalid():
@@ -115,6 +117,32 @@ def test_clean_invalid():
         _clean("abc")
     with pytest.raises(ValueError):
         _clean("1234567")
+    with pytest.raises(ValueError):
+        _clean("7-1234567")
+
+
+def test_return_scan_accepts_unfulfilled_no_tag(client, monkeypatch):
+    async def fake_find_order(order_name: str):
+        return {
+            "tags": "",
+            "fulfillment": "unfulfilled",
+            "status": "open",
+            "financial": "pending",
+            "store": "irranova",
+            "result": "❌ Unfulfilled",
+        }
+
+    monkeypatch.setattr("backend.app.shopify.find_order", fake_find_order)
+
+    resp = client.post("/return-scan", json={"barcode": "7-000777"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["result"] == "✅ Found"
+    assert data["order"] == "#777"
+    assert data["store"] == "irranova"
+    assert data["fulfillment"] == "unfulfilled"
+    assert data["status"] == "open"
+    assert data["financial"] == "pending"
 
 
 def test_scan_and_summary(client):
