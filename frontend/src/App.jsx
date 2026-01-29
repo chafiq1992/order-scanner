@@ -73,7 +73,10 @@ export default function App() {
   const [orders, setOrders] = useState([]);
   const [returnResult, setReturnResult] = useState("");
   const [returnResultClass, setReturnResultClass] = useState("");
-  const [returnOrders, setReturnOrders] = useState([]);
+  const [returnOrders, setReturnOrders] = useState([]); // recent "session" list (scan page)
+  const [returnRows, setReturnRows] = useState([]); // DB-backed list (list page)
+  const [returnDateStart, setReturnDateStart] = useState(new Date().toISOString().slice(0, 10));
+  const [returnDateEnd, setReturnDateEnd] = useState("");
   const [summary, setSummary] = useState({});
   const [updatedTags, setUpdatedTags] = useState({});
   const [scanning, setScanning] = useState(false);
@@ -134,6 +137,12 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem("returnOrders", JSON.stringify(returnOrders));
   }, [returnOrders]);
+
+  useEffect(() => {
+    if (page === "return" && returnTab === "list") {
+      fetchReturnScans();
+    }
+  }, [page, returnTab, returnDateStart, returnDateEnd]);
 
   useEffect(() => {
     if (tab === "list") {
@@ -736,6 +745,17 @@ export default function App() {
     setScanRows(data);
   }
 
+  async function fetchReturnScans() {
+    const start = returnDateStart;
+    const end = returnDateEnd || returnDateStart;
+    const url = new URL(`${apiBase}/return-scans`, window.location.origin);
+    url.searchParams.set("start", start);
+    url.searchParams.set("end", end);
+    const res = await fetch(url.toString());
+    const data = await res.json();
+    setReturnRows(Array.isArray(data) ? data : []);
+  }
+
   async function updateScan(id, payload) {
     const res = await fetch(`${apiBase}/scans/${id}`, {
       method: "PATCH",
@@ -876,7 +896,7 @@ export default function App() {
             Scan Return
           </button>
           <button className={returnTab === "list" ? "active" : ""} onClick={() => setReturnTab("list")}>
-            Scanned Returns
+            Scanned Returns{returnTab === "list" ? ` (${returnRows.length})` : ""}
           </button>
           <button className="" onClick={goToOrderPage}>
             Order Scanner
@@ -1004,16 +1024,23 @@ export default function App() {
       {page === "return" && returnTab === "list" && (
         <div className="table-card">
           <div className="filters" style={{ justifyContent: "space-between" }}>
-            <div style={{ fontWeight: 700 }}>Scanned returns today: {returnOrders.length}</div>
-            <button
-              className="btn"
-              onClick={() => {
-                localStorage.removeItem("returnOrders");
-                setReturnOrders([]);
-              }}
-            >
-              🗑️ Clear
-            </button>
+            <div className="filters" style={{ marginBottom: 0 }}>
+              <input
+                type="date"
+                value={returnDateStart}
+                onChange={(e) => setReturnDateStart(e.target.value)}
+              />
+              <input
+                type="date"
+                value={returnDateEnd}
+                onChange={(e) => setReturnDateEnd(e.target.value)}
+                placeholder="End date"
+              />
+              <button className="btn" onClick={fetchReturnScans}>
+                🔄 Refresh
+              </button>
+            </div>
+            <div style={{ fontWeight: 700 }}>Returns: {returnRows.length}</div>
           </div>
           <table className="scans-table">
             <thead>
@@ -1027,9 +1054,9 @@ export default function App() {
               </tr>
             </thead>
             <tbody>
-              {returnOrders.map((o, i) => (
+              {returnRows.map((o, i) => (
                 <tr key={i}>
-                  <td><strong>{o.order}</strong></td>
+                  <td><strong>{o.order_name || o.order}</strong></td>
                   <td>{(o.store || "").toUpperCase()}</td>
                   <td>{o.fulfillment || ""}</td>
                   <td>{o.financial || ""}</td>

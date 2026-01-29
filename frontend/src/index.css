@@ -69,7 +69,13 @@ h1 { color: #4c51bf; margin:0 0 1rem; font-size:1.8rem; font-weight:700; text-sh
   border-radius:10px;
   object-fit:cover;
 }
-#reader #qr-shaded-region, #reader canvas { display:none!important; }
+#reader #qr-shaded-region { display:none!important; }
+#reader canvas {
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 10px;
+  object-fit: cover;
+}
 .tag-popup {
   position:fixed; top:40%; left:50%; transform:translate(-50%,-50%);
   padding:1.5rem 3rem; border-radius:30px;

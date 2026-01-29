@@ -5,6 +5,7 @@ from .schemas import (
     ScanIn,
     ScanOut,
     ReturnScanOut,
+    ReturnScanRecord,
     ScanRecord,
     ScanUpdate,
     ScanCreate,
@@ -50,6 +51,30 @@ async def lifespan(app: FastAPI):
             await conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_scans_order_name ON scans(order_name)"))
         except Exception:
             # Ignore if DB does not support IF NOT EXISTS or duplicates exist
+            pass
+
+        # Ensure return_scans exists even on DBs where create_all() is not permitted.
+        # (Supabase migrations are still recommended; this is best-effort.)
+        try:
+            await conn.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS return_scans (
+                      id SERIAL PRIMARY KEY,
+                      ts TIMESTAMP WITHOUT TIME ZONE DEFAULT (now() at time zone 'utc'),
+                      order_name VARCHAR NOT NULL,
+                      store VARCHAR DEFAULT '',
+                      fulfillment VARCHAR DEFAULT '',
+                      status VARCHAR DEFAULT '',
+                      financial VARCHAR DEFAULT '',
+                      result VARCHAR DEFAULT ''
+                    )
+                    """
+                )
+            )
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_return_scans_ts ON return_scans(ts)"))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_return_scans_order_name ON return_scans(order_name)"))
+        except Exception:
             pass
 
     yield
@@ -181,26 +206,56 @@ async def return_scan(data: ScanIn):
     except Exception as e:
         raise HTTPException(502, f"Shopify lookup failed: {e}")
 
-    if (order.get("result") or "") == "❌ Not Found" or not (order.get("store") or ""):
-        return ReturnScanOut(
-            result="❌ Order not found",
-            order=order_name,
-            store="",
-            fulfillment="",
-            status="",
-            financial="",
-            ts=datetime.utcnow(),
-        )
+    found = not ((order.get("result") or "") == "❌ Not Found" or not (order.get("store") or ""))
+    payload = {
+        "result": ("✅ Found" if found else "❌ Order not found"),
+        "order": order_name,
+        "store": (order.get("store") or "") if found else "",
+        "fulfillment": (order.get("fulfillment") or "") if found else "",
+        "status": (order.get("status") or "") if found else "",
+        "financial": (order.get("financial") or "") if found else "",
+        "ts": datetime.utcnow(),
+    }
 
-    return ReturnScanOut(
-        result="✅ Found",
-        order=order_name,
-        store=order.get("store") or "",
-        fulfillment=order.get("fulfillment") or "",
-        status=order.get("status") or "",
-        financial=order.get("financial") or "",
-        ts=datetime.utcnow(),
-    )
+    # Persist return scans in DB so the Return list can be loaded across devices.
+    try:
+        row = models.ReturnScan(
+            order_name=order_name,
+            store=(payload["store"] or "").lower(),
+            fulfillment=(payload["fulfillment"] or "").lower(),
+            status=payload["status"] or "",
+            financial=payload["financial"] or "",
+            result=payload["result"] or "",
+        )
+        async with database.AsyncSessionLocal() as db:
+            db.add(row)
+            await db.commit()
+    except Exception:
+        # Don't fail the scan UI if persistence is temporarily unavailable.
+        pass
+
+    return ReturnScanOut(**payload)
+
+
+@app.get("/return-scans", response_model=list[ReturnScanRecord])
+async def list_return_scans(start: str, end: str | None = None):
+    """Return return-scans in an inclusive date range [start, end] (YYYY-MM-DD, UTC).
+
+    If *end* is omitted, it defaults to *start*.
+    """
+    start_day = datetime.fromisoformat(start).replace(hour=0, minute=0, second=0, microsecond=0)
+    end_str = end or start
+    end_day = datetime.fromisoformat(end_str).replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+
+    async with database.AsyncSessionLocal() as db:
+        stmt = (
+            select(models.ReturnScan)
+            .where(models.ReturnScan.ts >= start_day, models.ReturnScan.ts < end_day)
+            .order_by(models.ReturnScan.ts.desc())
+        )
+        q = await db.execute(stmt)
+        rows = q.scalars().all()
+        return [ReturnScanRecord.model_validate(r.__dict__) for r in rows]
 
 
 @app.post("/scan", response_model=ScanOut)

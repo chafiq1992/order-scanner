@@ -34,6 +34,17 @@ class ReturnScanOut(BaseModel):
     ts: datetime
 
 
+class ReturnScanRecord(BaseModel):
+    id: int
+    ts: datetime
+    order_name: str
+    store: str | None = ""
+    fulfillment: str | None = ""
+    status: str | None = ""
+    financial: str | None = ""
+    result: str | None = ""
+
+
 class DeliveryTagUpdate(BaseModel):
     tag: str | None = ""
 

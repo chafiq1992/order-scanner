@@ -16,3 +16,15 @@ class Scan(Base):
     result = Column(String)
     driver = Column(String, default="")
     cod = Column(Boolean, default=False)
+
+
+class ReturnScan(Base):
+    __tablename__ = "return_scans"
+    id = Column(Integer, primary_key=True, index=True)
+    ts = Column(DateTime, default=datetime.utcnow, index=True)
+    order_name = Column(String, index=True)
+    store = Column(String, default="")
+    fulfillment = Column(String, default="")
+    status = Column(String, default="")
+    financial = Column(String, default="")
+    result = Column(String, default="")
