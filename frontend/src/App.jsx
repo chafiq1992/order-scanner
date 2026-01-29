@@ -381,11 +381,11 @@ export default function App() {
 
       // Prefer environment camera; if iOS/Safari is picky, fall back to an explicit cameraId
       // 1) Most compatible form across browsers/libs
-      startWith({ facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } })
+      startWith({ facingMode: "environment" })
         .catch(async () => {
           try {
             // 2) Some browsers prefer the "ideal" constraint form
-            await startWith({ facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } });
+            await startWith({ facingMode: { ideal: "environment" } });
             return;
           } catch {}
           try {
@@ -580,10 +580,10 @@ export default function App() {
             verifyVideo();
           });
 
-      startWith({ facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } })
+      startWith({ facingMode: "environment" })
         .catch(async () => {
           try {
-            await startWith({ facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } });
+            await startWith({ facingMode: { ideal: "environment" } });
             return;
           } catch {}
           try {
