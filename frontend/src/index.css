@@ -52,9 +52,10 @@ h1 { color: #4c51bf; margin:0 0 1rem; font-size:1.8rem; font-weight:700; text-sh
 #reader {
   width:100%;
   max-width:500px;
-  height:auto;
-  aspect-ratio:4/3;
-  max-height:30vh;
+  /* Use an explicit height so iOS doesn't collapse the video to 0px. */
+  height:30vh;
+  min-height:220px;
+  max-height:360px;
   margin:0 auto 0.5rem;
   border-radius:15px;
   box-shadow:0 8px 25px rgba(0,0,0,0.3);
@@ -193,7 +194,16 @@ h1 { color: #4c51bf; margin:0 0 1rem; font-size:1.8rem; font-weight:700; text-sh
   .tab-bar button { padding:0.4rem 0.8rem; font-size:0.9rem; border-radius:8px; }
   h1 { font-size:1rem; margin:0; }
   .header { padding:0.5rem; margin-bottom:0.3rem; border-radius:15px; }
-  #reader { padding:5px; border-radius:10px; margin:0 auto 0.2rem; border-width:2px; max-height:22vh; max-width: 80%; }
+  #reader {
+    padding:5px;
+    border-radius:10px;
+    margin:0 auto 0.2rem;
+    border-width:2px;
+    max-width: 80%;
+    height:22vh;
+    min-height:180px;
+    max-height:280px;
+  }
   #result { margin:0.2rem 0; font-size:0.9rem; min-height:2em; padding:0.3rem; }
   .scan-btn { padding:0.5rem 0.8rem; font-size:0.95rem; gap:0.5em; border-radius:12px; }
   .scan-btn .emoji { font-size:1.1em; }

@@ -89,6 +89,7 @@ export default function App() {
   const [scanDate, setScanDate] = useState(new Date().toISOString().slice(0, 10));
   const [scanTag, setScanTag] = useState("");
   const [toast, setToast] = useState("");
+  const [cameraDebug, setCameraDebug] = useState("");
   const [popupTag, setPopupTag] = useState(null); // { tag, color }
   const [flashRow, setFlashRow] = useState(null);
   const [showManual, setShowManual] = useState(false);
@@ -220,6 +221,7 @@ export default function App() {
     setScanning(true);
     setShowStart(false);
     setShowAgain(false);
+    setCameraDebug("");
     setToast("Starting camera...");
     setTimeout(() => setToast(""), 1200);
 
@@ -280,16 +282,18 @@ export default function App() {
       processScan(code);
     };
 
-    const handleStartError = () => {
+    const handleStartError = (err) => {
       if (qr) {
         qr.stop().catch(() => {});
         qr.clear();
       }
       const isHttps = window.location.protocol === "https:" || window.location.hostname === "localhost";
+      const errMsg = err ? String(err) : "";
       const msg = isHttps
-        ? "Camera access denied or not available"
+        ? `Camera failed to start${errMsg ? `: ${errMsg}` : ""}`
         : "Camera requires HTTPS on iPhone Safari (open via https://)";
       handleScanError(msg);
+      setCameraDebug(msg);
       setScanning(false);
       setShowStart(true);
     };
@@ -391,6 +395,7 @@ export default function App() {
     setReturnScanning(true);
     setReturnShowStart(false);
     setReturnShowAgain(false);
+    setCameraDebug("");
     setToast("Starting camera...");
     setTimeout(() => setToast(""), 1200);
 
@@ -454,18 +459,20 @@ export default function App() {
       processReturnScan(code);
     };
 
-    const handleStartError = () => {
+    const handleStartError = (err) => {
       if (qr) {
         qr.stop().catch(() => {});
         qr.clear();
       }
       const isHttps = window.location.protocol === "https:" || window.location.hostname === "localhost";
+      const errMsg = err ? String(err) : "";
       const msg = isHttps
-        ? "Camera access denied or not available"
+        ? `Camera failed to start${errMsg ? `: ${errMsg}` : ""}`
         : "Camera requires HTTPS on iPhone Safari (open via https://)";
       setReturnResult(`❌ Error: ${msg}`);
       setReturnResultClass("result-error");
       playErrorSound();
+      setCameraDebug(msg);
       setReturnScanning(false);
       setReturnShowStart(true);
     };
@@ -904,6 +911,11 @@ export default function App() {
         </div>
       )}
       {toast && <div className="toast">{toast}</div>}
+      {!!cameraDebug && (
+        <div style={{ color: "#111827", background: "rgba(255,255,255,0.9)", padding: "0.4rem 0.6rem", borderRadius: 10, marginBottom: "0.5rem", fontSize: "0.9rem" }}>
+          <strong>Camera:</strong> {cameraDebug}
+        </div>
+      )}
       {page === "order" && tab === "scan" && (
         <>
           <div className="header">
