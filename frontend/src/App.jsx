@@ -90,6 +90,7 @@ export default function App() {
   const [scanTag, setScanTag] = useState("");
   const [toast, setToast] = useState("");
   const [cameraDebug, setCameraDebug] = useState("");
+  const [tapToPlayHint, setTapToPlayHint] = useState(false);
   const [popupTag, setPopupTag] = useState(null); // { tag, color }
   const [flashRow, setFlashRow] = useState(null);
   const [showManual, setShowManual] = useState(false);
@@ -222,6 +223,7 @@ export default function App() {
     setShowStart(false);
     setShowAgain(false);
     setCameraDebug("");
+    setTapToPlayHint(false);
     setToast("Starting camera...");
     setTimeout(() => setToast(""), 1200);
 
@@ -306,6 +308,8 @@ export default function App() {
       // iPhone Safari needs inline playback for camera video
       vid.setAttribute("playsinline", "true");
       vid.setAttribute("webkit-playsinline", "true");
+      vid.setAttribute("autoplay", "true");
+      vid.setAttribute("muted", "true");
       // Some iOS versions require the property, not only the attribute
       try {
         vid.playsInline = true;
@@ -316,6 +320,19 @@ export default function App() {
       vid.play?.().catch?.(() => {});
     };
 
+    const tryPlayPreviewVideo = () => {
+      const root = readerRef.current;
+      if (!root) return false;
+      const vid = root.querySelector("video");
+      if (!vid) return false;
+      applyIosVideoAttrs();
+      try {
+        const p = vid.play?.();
+        if (p?.catch) p.catch(() => {});
+      } catch {}
+      return true;
+    };
+
     const verifyVideo = () => {
       const startedAt = Date.now();
       const tick = () => {
@@ -323,6 +340,10 @@ export default function App() {
         if (!root) return;
         const vid = root.querySelector("video");
         applyIosVideoAttrs();
+        // If the element exists but is still paused/black, hint user to tap to start playback.
+        if (vid && (vid.paused || vid.readyState < 2)) {
+          setTapToPlayHint(true);
+        }
         // On iOS, videoWidth/Height can remain 0 for a moment even when stream is OK.
         // Also, some implementations don't expose srcObject reliably—use multiple signals.
         const ok =
@@ -330,9 +351,19 @@ export default function App() {
           (vid.readyState >= 2 ||
             (vid.srcObject && vid.srcObject.getTracks && vid.srcObject.getTracks().length > 0) ||
             vid.currentTime > 0);
-        if (ok) return;
+        if (ok) {
+          setTapToPlayHint(false);
+          return;
+        }
         // Don't hard-fail too aggressively; just keep trying for a bit longer.
-        if (Date.now() - startedAt > 8000) return;
+        if (Date.now() - startedAt > 2500) {
+          // Try an explicit play attempt; if still not ok, keep the tap hint visible.
+          tryPlayPreviewVideo();
+        }
+        if (Date.now() - startedAt > 8000) {
+          setCameraDebug("Camera started but preview is not playing. Tap inside the camera box once.");
+          return;
+        }
         setTimeout(tick, 250);
       };
       setTimeout(tick, 250);
@@ -396,6 +427,7 @@ export default function App() {
     setReturnShowStart(false);
     setReturnShowAgain(false);
     setCameraDebug("");
+    setTapToPlayHint(false);
     setToast("Starting camera...");
     setTimeout(() => setToast(""), 1200);
 
@@ -484,12 +516,27 @@ export default function App() {
       if (!vid) return;
       vid.setAttribute("playsinline", "true");
       vid.setAttribute("webkit-playsinline", "true");
+      vid.setAttribute("autoplay", "true");
+      vid.setAttribute("muted", "true");
       try {
         vid.playsInline = true;
       } catch {}
       vid.muted = true;
       vid.autoplay = true;
       vid.play?.().catch?.(() => {});
+    };
+
+    const tryPlayPreviewVideo = () => {
+      const root = readerRef.current;
+      if (!root) return false;
+      const vid = root.querySelector("video");
+      if (!vid) return false;
+      applyIosVideoAttrs();
+      try {
+        const p = vid.play?.();
+        if (p?.catch) p.catch(() => {});
+      } catch {}
+      return true;
     };
 
     const verifyVideo = () => {
@@ -499,13 +546,25 @@ export default function App() {
         if (!root) return;
         const vid = root.querySelector("video");
         applyIosVideoAttrs();
+        if (vid && (vid.paused || vid.readyState < 2)) {
+          setTapToPlayHint(true);
+        }
         const ok =
           !!vid &&
           (vid.readyState >= 2 ||
             (vid.srcObject && vid.srcObject.getTracks && vid.srcObject.getTracks().length > 0) ||
             vid.currentTime > 0);
-        if (ok) return;
-        if (Date.now() - startedAt > 8000) return;
+        if (ok) {
+          setTapToPlayHint(false);
+          return;
+        }
+        if (Date.now() - startedAt > 2500) {
+          tryPlayPreviewVideo();
+        }
+        if (Date.now() - startedAt > 8000) {
+          setCameraDebug("Camera started but preview is not playing. Tap inside the camera box once.");
+          return;
+        }
         setTimeout(tick, 250);
       };
       setTimeout(tick, 250);
@@ -924,7 +983,21 @@ export default function App() {
               id="reader"
               ref={readerRef}
               className={scanning ? "scanning" : ""}
+              onClick={() => {
+                // Some mobile browsers block autoplay until an explicit user gesture.
+                const vid = readerRef.current?.querySelector?.("video");
+                if (vid) {
+                  try {
+                    vid.play?.().catch?.(() => {});
+                  } catch {}
+                }
+              }}
             ></div>
+            {tapToPlayHint && (
+              <div style={{ marginTop: 6, color: "#6b7280", fontSize: "0.9rem" }}>
+                If the camera is white/blank: <strong>tap inside the camera box once</strong>.
+              </div>
+            )}
             {popupTag && (
               <div
                 className="tag-popup"
@@ -1012,7 +1085,24 @@ export default function App() {
         <>
           <div className="header">
             <h1>↩️ Return Scanner</h1>
-            <div id="reader" ref={readerRef} className={returnScanning ? "scanning" : ""}></div>
+            <div
+              id="reader"
+              ref={readerRef}
+              className={returnScanning ? "scanning" : ""}
+              onClick={() => {
+                const vid = readerRef.current?.querySelector?.("video");
+                if (vid) {
+                  try {
+                    vid.play?.().catch?.(() => {});
+                  } catch {}
+                }
+              }}
+            ></div>
+            {tapToPlayHint && (
+              <div style={{ marginTop: 6, color: "#6b7280", fontSize: "0.9rem" }}>
+                If the camera is white/blank: <strong>tap inside the camera box once</strong>.
+              </div>
+            )}
             {returnResult && (
               <div id="result" className={returnResultClass}>
                 {returnResult}
