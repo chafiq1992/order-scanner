@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { jsPDF } from "jspdf";
-import { Html5Qrcode } from "html5-qrcode";
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
 
 // Allow using a relative URL when VITE_API_BASE_URL is undefined.
 const apiBase = import.meta.env.VITE_API_BASE_URL || "";
@@ -36,6 +36,16 @@ const tagSynonyms = {
   l24: "l24",
   ibex: "ibex",
 };
+
+function isIOS() {
+  // Covers iPhone/iPad/iPod, including iPadOS reporting as Mac.
+  const ua = navigator.userAgent || "";
+  const platform = navigator.platform || "";
+  return (
+    /iPad|iPhone|iPod/i.test(ua) ||
+    (platform === "MacIntel" && typeof navigator.maxTouchPoints === "number" && navigator.maxTouchPoints > 1)
+  );
+}
 
 export default function App() {
   const readerRef = useRef(null);
@@ -205,17 +215,32 @@ export default function App() {
     setTimeout(() => setToast(""), 1200);
 
     let qr = scannerRef.current;
+    const ios = isIOS();
     const config = {
-      fps: 25,
+      fps: ios ? 12 : 25,
       qrbox: (vw, vh) => {
         // Use a larger scan area. Since the container is wide and short, 
         // we want to use most of the height.
         // We'll use a rectangular box that fits well.
         return { width: vw * 0.8, height: vh * 0.8 };
       },
-      experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+      // iOS BarcodeDetector support is inconsistent for 1D barcodes (e.g. CODE_128).
+      // Prefer the JS decoder on iPhone/iPad for reliability.
+      experimentalFeatures: { useBarCodeDetectorIfSupported: !ios },
+      // Explicit formats help reliability and performance, especially on iOS.
+      formatsToSupport: [
+        Html5QrcodeSupportedFormats.CODE_128,
+        Html5QrcodeSupportedFormats.CODE_39,
+        Html5QrcodeSupportedFormats.EAN_13,
+        Html5QrcodeSupportedFormats.EAN_8,
+        Html5QrcodeSupportedFormats.UPC_A,
+        Html5QrcodeSupportedFormats.UPC_E,
+        Html5QrcodeSupportedFormats.ITF,
+        Html5QrcodeSupportedFormats.QR_CODE,
+        Html5QrcodeSupportedFormats.PDF_417,
+      ],
       disableFlip: true,
-      aspectRatio: 1.0, 
+      aspectRatio: 1.0,
     };
     const onScan = (code) => {
       const now = Date.now();
@@ -312,11 +337,11 @@ export default function App() {
 
       // Prefer environment camera; if iOS/Safari is picky, fall back to an explicit cameraId
       // 1) Most compatible form across browsers/libs
-      startWith({ facingMode: "environment" })
+      startWith({ facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } })
         .catch(async () => {
           try {
             // 2) Some browsers prefer the "ideal" constraint form
-            await startWith({ facingMode: { ideal: "environment" } });
+            await startWith({ facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } });
             return;
           } catch {}
           try {
@@ -361,12 +386,24 @@ export default function App() {
     setTimeout(() => setToast(""), 1200);
 
     let qr = scannerRef.current;
+    const ios = isIOS();
     const config = {
-      fps: 25,
+      fps: ios ? 12 : 25,
       qrbox: (vw, vh) => {
         return { width: vw * 0.8, height: vh * 0.8 };
       },
-      experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+      experimentalFeatures: { useBarCodeDetectorIfSupported: !ios },
+      formatsToSupport: [
+        Html5QrcodeSupportedFormats.CODE_128,
+        Html5QrcodeSupportedFormats.CODE_39,
+        Html5QrcodeSupportedFormats.EAN_13,
+        Html5QrcodeSupportedFormats.EAN_8,
+        Html5QrcodeSupportedFormats.UPC_A,
+        Html5QrcodeSupportedFormats.UPC_E,
+        Html5QrcodeSupportedFormats.ITF,
+        Html5QrcodeSupportedFormats.QR_CODE,
+        Html5QrcodeSupportedFormats.PDF_417,
+      ],
       disableFlip: true,
       aspectRatio: 1.0,
     };
@@ -468,10 +505,10 @@ export default function App() {
             verifyVideo();
           });
 
-      startWith({ facingMode: "environment" })
+      startWith({ facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } })
         .catch(async () => {
           try {
-            await startWith({ facingMode: { ideal: "environment" } });
+            await startWith({ facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } });
             return;
           } catch {}
           try {
