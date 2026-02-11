@@ -27,10 +27,10 @@ async def lifespan(app: FastAPI):
     async with database.engine.begin() as conn:
         await conn.run_sync(models.Base.metadata.create_all)
 
-        def get_columns(sync_conn):
-            return [c["name"] for c in inspect(sync_conn).get_columns("scans")]
+        def get_columns(sync_conn, table_name: str):
+            return [c["name"] for c in inspect(sync_conn).get_columns(table_name)]
 
-        columns = await conn.run_sync(get_columns)
+        columns = await conn.run_sync(get_columns, "scans")
 
         if "driver" not in columns:
             await conn.execute(
@@ -54,8 +54,9 @@ async def lifespan(app: FastAPI):
             # Ignore if DB does not support IF NOT EXISTS or duplicates exist
             pass
 
-        # Ensure return_scans exists even on DBs where create_all() is not permitted.
-        # (Supabase migrations are still recommended; this is best-effort.)
+        # --- best-effort Return Scanner schema ensure/migrate ---
+        # We store return scans in a separate table. For existing deployments we need to add any
+        # missing columns (e.g. 'tags') without breaking startup.
         try:
             await conn.execute(
                 text(
@@ -74,6 +75,32 @@ async def lifespan(app: FastAPI):
                     """
                 )
             )
+        except Exception:
+            # If CREATE TABLE isn't permitted (managed DB), we still try to ALTER below.
+            pass
+
+        try:
+            return_cols = await conn.run_sync(get_columns, "return_scans")
+        except Exception:
+            return_cols = []
+
+        try:
+            if "tags" not in return_cols:
+                await conn.execute(text("ALTER TABLE return_scans ADD COLUMN tags VARCHAR DEFAULT ''"))
+            if "store" not in return_cols:
+                await conn.execute(text("ALTER TABLE return_scans ADD COLUMN store VARCHAR DEFAULT ''"))
+            if "fulfillment" not in return_cols:
+                await conn.execute(text("ALTER TABLE return_scans ADD COLUMN fulfillment VARCHAR DEFAULT ''"))
+            if "status" not in return_cols:
+                await conn.execute(text("ALTER TABLE return_scans ADD COLUMN status VARCHAR DEFAULT ''"))
+            if "financial" not in return_cols:
+                await conn.execute(text("ALTER TABLE return_scans ADD COLUMN financial VARCHAR DEFAULT ''"))
+            if "result" not in return_cols:
+                await conn.execute(text("ALTER TABLE return_scans ADD COLUMN result VARCHAR DEFAULT ''"))
+        except Exception:
+            pass
+
+        try:
             await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_return_scans_ts ON return_scans(ts)"))
             await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_return_scans_order_name ON return_scans(order_name)"))
         except Exception:
