@@ -23,6 +23,7 @@ class ReturnScan(Base):
     id = Column(Integer, primary_key=True, index=True)
     ts = Column(DateTime, default=datetime.utcnow, index=True)
     order_name = Column(String, index=True)
+    tags = Column(String, default="")
     store = Column(String, default="")
     fulfillment = Column(String, default="")
     status = Column(String, default="")

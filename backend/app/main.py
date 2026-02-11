@@ -6,6 +6,7 @@ from .schemas import (
     ScanOut,
     ReturnScanOut,
     ReturnScanRecord,
+    ReturnScanCreate,
     ScanRecord,
     ScanUpdate,
     ScanCreate,
@@ -63,6 +64,7 @@ async def lifespan(app: FastAPI):
                       id SERIAL PRIMARY KEY,
                       ts TIMESTAMP WITHOUT TIME ZONE DEFAULT (now() at time zone 'utc'),
                       order_name VARCHAR NOT NULL,
+                      tags VARCHAR DEFAULT '',
                       store VARCHAR DEFAULT '',
                       fulfillment VARCHAR DEFAULT '',
                       status VARCHAR DEFAULT '',
@@ -219,8 +221,10 @@ async def return_scan(data: ScanIn):
 
     # Persist return scans in DB so the Return list can be loaded across devices.
     try:
+        tags = (order.get("tags") or "") if found else ""
         row = models.ReturnScan(
             order_name=order_name,
+            tags=tags,
             store=(payload["store"] or "").lower(),
             fulfillment=(payload["fulfillment"] or "").lower(),
             status=payload["status"] or "",
@@ -238,7 +242,7 @@ async def return_scan(data: ScanIn):
 
 
 @app.get("/return-scans", response_model=list[ReturnScanRecord])
-async def list_return_scans(start: str, end: str | None = None):
+async def list_return_scans(start: str, end: str | None = None, tag: str | None = None):
     """Return return-scans in an inclusive date range [start, end] (YYYY-MM-DD, UTC).
 
     If *end* is omitted, it defaults to *start*.
@@ -248,14 +252,52 @@ async def list_return_scans(start: str, end: str | None = None):
     end_day = datetime.fromisoformat(end_str).replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
 
     async with database.AsyncSessionLocal() as db:
-        stmt = (
-            select(models.ReturnScan)
-            .where(models.ReturnScan.ts >= start_day, models.ReturnScan.ts < end_day)
-            .order_by(models.ReturnScan.ts.desc())
+        stmt = select(models.ReturnScan).where(
+            models.ReturnScan.ts >= start_day, models.ReturnScan.ts < end_day
         )
+        if tag:
+            stmt = stmt.where(models.ReturnScan.tags.ilike(f"%{tag}%"))
+        stmt = stmt.order_by(models.ReturnScan.ts.desc())
         q = await db.execute(stmt)
         rows = q.scalars().all()
         return [ReturnScanRecord.model_validate(r.__dict__) for r in rows]
+
+
+@app.post("/return-scans", response_model=ReturnScanRecord)
+async def create_return_scan(data: ReturnScanCreate):
+    """Create a return-scan record manually by typed order number.
+
+    This follows the same flow as /return-scan: normalize the order number and
+    look it up in Shopify, then persist to DB.
+    """
+    try:
+        order_name = _clean(data.order_name)
+    except ValueError:
+        raise HTTPException(400, "❌ Invalid order number")
+
+    try:
+        order = await shopify.find_order(order_name)
+    except Exception as e:
+        raise HTTPException(502, f"Shopify lookup failed: {e}")
+
+    found = not ((order.get("result") or "") == "❌ Not Found" or not (order.get("store") or ""))
+    result = "✅ Found" if found else "❌ Order not found"
+    row = models.ReturnScan(
+        order_name=order_name,
+        tags=((order.get("tags") or "") if found else ""),
+        store=((order.get("store") or "") if found else "").lower(),
+        fulfillment=((order.get("fulfillment") or "") if found else "").lower(),
+        status=(order.get("status") or "") if found else "",
+        financial=(order.get("financial") or "") if found else "",
+        result=result,
+    )
+
+    async with database.AsyncSessionLocal() as db:
+        db.add(row)
+        await db.commit()
+        await db.refresh(row)
+
+    return ReturnScanRecord.model_validate(row.__dict__)
 
 
 @app.post("/scan", response_model=ScanOut)
@@ -580,8 +622,10 @@ def health():
 
 # Allow deep-linking directly to the Return Scanner page.
 # This must be defined before the StaticFiles mount (which is a catch-all).
-@app.get("/return-scan")
-def return_scan_page():
+# Keep /return-scan for backwards compatibility; prefer /return-scanner.
+@app.get("/return-scan", include_in_schema=False)
+@app.get("/return-scanner", include_in_schema=False)
+def return_scanner_page():
     static_root = os.getenv("STATIC_FILES_PATH", "static")
     index_path = os.path.join(static_root, "index.html")
     if not os.path.exists(index_path):

@@ -54,13 +54,13 @@ export default function App() {
 
   function pageFromPathname(pathname) {
     const p = String(pathname || "/").toLowerCase();
-    if (p === "/return-scan" || p.startsWith("/return-scan/")) return "return";
+    if (p === "/return-scanner" || p.startsWith("/return-scanner/")) return "return";
     return "order";
   }
 
   // Two separate pages (routes):
   // - "/"              => order scanner app (existing)
-  // - "/return-scan"   => return scanner app (separate UI + separate list)
+  // - "/return-scanner" => return scanner app (separate UI + separate list)
   const [page, setPage] = useState(() => pageFromPathname(window.location.pathname));
 
   // Order-scanner tabs (only used on the order page)
@@ -77,6 +77,9 @@ export default function App() {
   const [returnRows, setReturnRows] = useState([]); // DB-backed list (list page)
   const [returnDateStart, setReturnDateStart] = useState(new Date().toISOString().slice(0, 10));
   const [returnDateEnd, setReturnDateEnd] = useState("");
+  const [returnTag, setReturnTag] = useState("");
+  const [showReturnManual, setShowReturnManual] = useState(false);
+  const [manualReturnOrder, setManualReturnOrder] = useState("");
   const [summary, setSummary] = useState({});
   const [updatedTags, setUpdatedTags] = useState({});
   const [scanning, setScanning] = useState(false);
@@ -155,7 +158,7 @@ export default function App() {
     }
   }, [tab, scanDate, scanTag]);
 
-  // Allow direct links like /return-scan and browser back/forward.
+  // Allow direct links like /return-scanner and browser back/forward.
   useEffect(() => {
     const onPop = () => setPage(pageFromPathname(window.location.pathname));
     window.addEventListener("popstate", onPop);
@@ -170,8 +173,8 @@ export default function App() {
   }
 
   function goToReturnPage() {
-    if (window.location.pathname !== "/return-scan") {
-      window.history.pushState({}, "", "/return-scan");
+    if (window.location.pathname !== "/return-scanner") {
+      window.history.pushState({}, "", "/return-scanner");
     }
     setPage("return");
   }
@@ -817,6 +820,7 @@ export default function App() {
     const url = new URL(`${apiBase}/return-scans`, window.location.origin);
     url.searchParams.set("start", start);
     url.searchParams.set("end", end);
+    if (returnTag) url.searchParams.set("tag", returnTag);
     const res = await fetch(url.toString());
     const data = await res.json();
     setReturnRows(Array.isArray(data) ? data : []);
@@ -869,6 +873,56 @@ export default function App() {
       setTimeout(() => setToast(""), 1500);
       fetchScans();
       fetchSummary();
+    }
+  }
+
+  async function createManualReturnScan() {
+    if (!manualReturnOrder.trim()) return;
+    const res = await fetch(`${apiBase}/return-scans`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ order_name: manualReturnOrder.trim() }),
+    });
+    if (res.ok) {
+      let row = null;
+      try {
+        row = await res.json();
+      } catch {}
+      setShowReturnManual(false);
+      setManualReturnOrder("");
+      // Update the "session" list on the scan page too (today only, stored in localStorage).
+      if (row && row.order_name) {
+        const resText = row.result || "✅ Found";
+        setReturnResult(`${statusIcon(resText)} ${resText}`);
+        setReturnResultClass(resultClassFrom(resText));
+        setReturnOrders((prev) =>
+          [
+            {
+              result: resText,
+              order: row.order_name,
+              store: row.store || "",
+              fulfillment: row.fulfillment || "",
+              status: row.status || "",
+              financial: row.financial || "",
+              ts: row.ts || new Date().toISOString(),
+            },
+            ...prev,
+          ].slice(0, 20)
+        );
+      }
+      setToast("Added return ✓");
+      setTimeout(() => setToast(""), 1500);
+      fetchReturnScans();
+      return;
+    }
+    try {
+      const data = await res.json();
+      const msg = data?.detail || "Failed to add return";
+      setToast(String(msg));
+      setTimeout(() => setToast(""), 2000);
+    } catch {
+      setToast("Failed to add return");
+      setTimeout(() => setToast(""), 2000);
     }
   }
 
@@ -1120,6 +1174,9 @@ export default function App() {
                 <span className="emoji">🔄</span>Scan Again
               </button>
             )}
+            <button className="btn" onClick={() => setShowReturnManual(true)}>
+              ➕ Add Manually
+            </button>
           </div>
         </>
       )}
@@ -1141,8 +1198,40 @@ export default function App() {
               <button className="btn" onClick={fetchReturnScans}>
                 🔄 Refresh
               </button>
+              <button className="btn" onClick={() => setShowReturnManual(true)}>
+                ➕ Add Manually
+              </button>
             </div>
             <div style={{ fontWeight: 700 }}>Returns: {returnRows.length}</div>
+          </div>
+
+          <div className="tag-pills" style={{ marginBottom: 8, justifyContent: "center" }}>
+            <span
+              className={`tag-pill ${returnTag === "" ? "active" : ""}`}
+              onClick={() => setReturnTag("")}
+            >
+              All
+            </span>
+            {Object.entries(
+              returnRows.reduce((acc, r) => {
+                const key = detectTag(r.tags) || "none";
+                acc[key] = (acc[key] || 0) + 1;
+                return acc;
+              }, {})
+            )
+              .filter(([tag]) => tag !== "big")
+              .sort((a, b) => b[1] - a[1])
+              .map(([tag, count]) => (
+                <span
+                  key={tag}
+                  className={`tag-pill ${returnTag === tag ? "active" : ""}`}
+                  style={{ background: tagColors[tag] || tagColors["none"] }}
+                  onClick={() => setReturnTag((cur) => (cur === tag ? "" : tag))}
+                  title="Filter by delivery tag"
+                >
+                  {tag === "none" ? "NO TAG" : tag.toUpperCase()} ({count})
+                </span>
+              ))}
           </div>
           <table className="scans-table">
             <thead>
@@ -1394,6 +1483,29 @@ export default function App() {
             <div className="modal-actions">
               <button className="btn" onClick={() => setShowManual(false)}>Cancel</button>
               <button className="btn btn-primary" onClick={createManualScan}>Add</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showReturnManual && (
+        <div className="modal-overlay" onClick={() => setShowReturnManual(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Add Return Manually</h3>
+            <div className="form-row">
+              <label>Order #</label>
+              <input
+                placeholder="#123456"
+                value={manualReturnOrder}
+                onChange={(e) => setManualReturnOrder(e.target.value)}
+              />
+            </div>
+            <div className="modal-actions">
+              <button className="btn" onClick={() => setShowReturnManual(false)}>
+                Cancel
+              </button>
+              <button className="btn btn-primary" onClick={createManualReturnScan}>
+                Add
+              </button>
             </div>
           </div>
         </div>
